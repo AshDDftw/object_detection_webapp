@@ -9,8 +9,8 @@ import pandas as pd
 from datetime import datetime
 import tempfile
 
-# Load YOLOv5 model
-model = torch.hub.load('ultralytics/yolov5', 'yolov5s', pretrained=True)
+model_path = "yolov5s.pt"  # Path to the saved YOLOv5 model
+model = torch.hub.load('ultralytics/yolov5', 'custom', path=model_path, force_reload=True)
 
 # Initialize Streamlit layout
 st.set_page_config(

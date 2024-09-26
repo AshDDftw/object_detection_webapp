@@ -1,5 +1,5 @@
 streamlit==1.25.0
-torch==2.0.1
+torch  # Let pip resolve the appropriate version
 numpy==1.23.5
 opencv-python-headless==4.8.0.74
 Pillow==9.5.0

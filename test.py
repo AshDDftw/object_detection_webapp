@@ -10,7 +10,7 @@ from datetime import datetime
 import tempfile
 
 model_path = "yolov5s.pt"  # Path to the saved YOLOv5 model
-model = torch.hub.load('ultralytics/yolov5', 'custom', path=model_path, force_reload=True)
+model = torch.hub.load('ultralytics/yolov5', 'custom', path=model_path, force_reload=True, skip_validation=True)
 
 # Initialize Streamlit layout
 st.set_page_config(

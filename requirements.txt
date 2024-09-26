@@ -5,4 +5,4 @@ opencv-python-headless==4.8.0.74
 Pillow==9.5.0
 pandas==2.1.0
 plotly==5.17.0
-ultralytics==8.0.20
+ultralytics

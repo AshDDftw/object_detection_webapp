@@ -8,3 +8,4 @@ plotly==5.17.0
 ultralytics
 setuptools>=58.0.0
 wheel
+streamlit_webrtc

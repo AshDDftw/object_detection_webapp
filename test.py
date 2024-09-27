@@ -284,6 +284,9 @@ def main():
             key="object-detection",
             mode=WebRtcMode.SENDRECV,
             video_processor_factory=YOLOv5VideoProcessor,
+            rtc_configuration={
+            "iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]
+            },
             media_stream_constraints={"video": True, "audio": False},
             async_processing=True,
         )

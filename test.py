@@ -8,6 +8,9 @@ from PIL import Image
 import pandas as pd
 from datetime import datetime
 import tempfile
+from streamlit_webrtc import webrtc_streamer, VideoProcessorBase, WebRtcMode
+import av
+import threading
 
 # Load YOLOv5 model
 model_path = "yolov5s.pt"  # Path to the saved YOLOv5 model
@@ -30,13 +33,6 @@ class_selection = st.sidebar.multiselect(
     "Select Classes to Detect",
     options=list(model.names.values()),  # Ensure it's a list
     default=list(model.names.values())   # Default to all classes
-)
-
-# Option for weather and sensor condition
-weather_selection = st.sidebar.multiselect(
-    "Select Weather and Sensor Conditions",
-    options=["Rainy", "Cloudy", "Foggy"],
-    default=[]  # No default selection
 )
 
 # Option to select static image/video upload or live detection
@@ -235,116 +231,101 @@ with st.container():
 
 # Initialize placeholder for the timestamp histogram
 timestamp_histogram_placeholder = st.empty()
+# YOLOv5 video processor class for WebRTC live streaming
+class YOLOv5VideoProcessor(VideoProcessorBase):
+    def __init__(self):
+        self.confidence_threshold = confidence_threshold  # Confidence threshold slider value from the sidebar
+        self.class_selection = class_selection  # Class selection from the sidebar
+        self.lock = threading.Lock()  # Ensure thread-safe access by adding a lock
+        self.results = None
+        self.current_class_count = {}
+        self.frame_area = 0
+        self.fps = 0
+        self.inference_speed = 0
 
-# Start main app logic based on the mode
-if detection_mode == "Live Detection":
-    cap = cv2.VideoCapture(0)
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 320)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
+    def recv(self, frame):
+        img = frame.to_ndarray(format="bgr24")  # Get the video frame as a NumPy array
 
-    # Live detection loop
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            st.warning("Failed to read from webcam. Please check your webcam settings.")
-            break
+        # Process frame and collect metrics
+        results, current_class_count, frame_area, fps, inference_speed = process_frame(img)
 
-        results, current_class_count, frame_area, fps, inference_speed = process_frame(frame)
+        # Update class state safely with a lock
+        with self.lock:
+            self.results = results
+            self.current_class_count = current_class_count
+            self.frame_area = frame_area
+            self.fps = fps
+            self.inference_speed = inference_speed
 
-        total = sum(current_class_count.values())
-        total_objects.metric("Total Objects", total)
-        fps_display.metric("FPS", f"{fps:.2f}")
-        resolution_display.metric("Resolution", f"{frame.shape[1]}x{frame.shape[0]}")
-        inference_speed_display.metric("Inference Speed (ms)", f"{inference_speed:.2f}")
-
+        # Draw bounding boxes and labels on the frame
         for *xyxy, conf, cls in results.xyxy[0]:
-            if conf > confidence_threshold and model.names[int(cls)] in class_selection:
-                label = f'{model.names[int(cls)]} {conf:.2f}'
-                cv2.rectangle(frame, (int(xyxy[0]), int(xyxy[1])),
-                              (int(xyxy[2]), int(xyxy[3])), (0, 255, 0), 2)
-                cv2.putText(frame, label, (int(xyxy[0]), int(xyxy[1]) - 10),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+            if conf > self.confidence_threshold:  # Apply the confidence threshold
+                class_name = model.names[int(cls)]
+                if class_name in self.class_selection:
+                    label = f'{class_name} {conf:.2f}'
+                    cv2.rectangle(img, (int(xyxy[0]), int(xyxy[1])), (int(xyxy[2]), int(xyxy[3])), (0, 255, 0), 2)
+                    cv2.putText(img, label, (int(xyxy[0]), int(xyxy[1]) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
 
-        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        image = Image.fromarray(rgb_frame)
-        frame_placeholder.image(image, caption="Webcam Feed", width=320)
+        return av.VideoFrame.from_ndarray(img, format="bgr24")
 
-        # Update and display the charts
-        histogram = update_histogram(current_class_count)
-        pie_chart = calculate_area_proportions(results, frame_area)
-        vehicle_pie_chart = update_vehicle_proportion_chart(current_class_count)
+# Main logic to switch between detection modes (Live, Image, Video)
+def main():
+    frame_placeholder = st.empty()
+    histogram_placeholder = st.empty()
+    pie_chart_placeholder = st.empty()
+    vehicle_pie_chart_placeholder = st.empty()
+    traffic_graph_placeholder = st.empty()
+    cumulative_graph_placeholder = st.empty()
+    timestamp_histogram_placeholder = st.empty()
 
-        histogram_placeholder.plotly_chart(histogram, use_container_width=True)
-        pie_chart_placeholder.plotly_chart(pie_chart, use_container_width=True)
-        vehicle_pie_chart_placeholder.plotly_chart(vehicle_pie_chart, use_container_width=True)
+    # WebRTC Live Detection mode
+    if detection_mode == "Live Detection":
+        ctx = webrtc_streamer(
+            key="object-detection",
+            mode=WebRtcMode.SENDRECV,
+            video_processor_factory=YOLOv5VideoProcessor,
+            media_stream_constraints={"video": True, "audio": False},
+            async_processing=True,
+        )
 
-        traffic_graph, cumulative_graph = update_traffic_graph(timestamp_data)
-        traffic_graph_placeholder.plotly_chart(traffic_graph, use_container_width=True)
-        cumulative_graph_placeholder.plotly_chart(cumulative_graph, use_container_width=True)
+        # Loop for continuously updating metrics while webcam is running
+        while ctx.state.playing:
+            if ctx.video_processor:
+                processor = ctx.video_processor
+                if hasattr(processor, 'lock'):
+                    with processor.lock:  # Ensure thread-safe access to the processor state
+                        if processor.results:
+                            # Update metrics and charts
+                            total = sum(processor.current_class_count.values())
+                            total_objects.metric("Total Objects", total)
+                            fps_display.metric("FPS", f"{processor.fps:.2f}")
+                            resolution_display.metric("Resolution", f"{640}x{480}")
+                            inference_speed_display.metric("Inference Speed (ms)", f"{processor.inference_speed:.2f}")
+                            
+                            histogram = update_histogram(processor.current_class_count)
+                            pie_chart = calculate_area_proportions(processor.results, processor.frame_area)
+                            vehicle_pie_chart = update_vehicle_proportion_chart(processor.current_class_count)
 
-        line_graph = update_timestamp_line_graph(timestamp_data)
-        timestamp_histogram_placeholder.plotly_chart(line_graph, use_container_width=True)
+                            histogram_placeholder.plotly_chart(histogram, use_container_width=True)
+                            pie_chart_placeholder.plotly_chart(pie_chart, use_container_width=True)
+                            vehicle_pie_chart_placeholder.plotly_chart(vehicle_pie_chart, use_container_width=True)
 
-        time.sleep(0.1)
+                            traffic_graph, cumulative_graph = update_traffic_graph(timestamp_data)
+                            traffic_graph_placeholder.plotly_chart(traffic_graph, use_container_width=True)
+                            cumulative_graph_placeholder.plotly_chart(cumulative_graph, use_container_width=True)
 
-    cap.release()
+                            line_graph = update_timestamp_line_graph(timestamp_data)
+                            timestamp_histogram_placeholder.plotly_chart(line_graph, use_container_width=True)
 
-elif detection_mode == "Upload Image":
-    uploaded_image = st.sidebar.file_uploader("Upload an Image", type=["jpg", "jpeg", "png"])
-    
-    if uploaded_image is not None:
-        image = Image.open(uploaded_image)
-        frame = np.array(image)
+            time.sleep(0.1)  # Add a small sleep to avoid consuming too many resources
+
+    # Image upload detection mode
+    elif detection_mode == "Upload Image":
+        uploaded_image = st.sidebar.file_uploader("Upload an Image", type=["jpg", "jpeg", "png"])
         
-        results, current_class_count, frame_area, fps, inference_speed = process_frame(frame)
-        
-        total = sum(current_class_count.values())
-        total_objects.metric("Total Objects", total)
-        fps_display.metric("FPS", f"{fps:.2f}")
-        resolution_display.metric("Resolution", f"{frame.shape[1]}x{frame.shape[0]}")
-        inference_speed_display.metric("Inference Speed (ms)", f"{inference_speed:.2f}")
-
-        for *xyxy, conf, cls in results.xyxy[0]:
-            if conf > confidence_threshold and model.names[int(cls)] in class_selection:
-                label = f'{model.names[int(cls)]} {conf:.2f}'
-                cv2.rectangle(frame, (int(xyxy[0]), int(xyxy[1])),
-                              (int(xyxy[2]), int(xyxy[3])), (0, 255, 0), 2)
-                cv2.putText(frame, label, (int(xyxy[0]), int(xyxy[1]) - 10),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
-
-        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        image_with_detections = Image.fromarray(rgb_frame)
-        st.image(image_with_detections, caption="Uploaded Image", use_column_width=True)
-
-        histogram = update_histogram(current_class_count)
-        pie_chart = calculate_area_proportions(results, frame_area)
-        vehicle_pie_chart = update_vehicle_proportion_chart(current_class_count)
-
-        histogram_placeholder.plotly_chart(histogram, use_container_width=True)
-        pie_chart_placeholder.plotly_chart(pie_chart, use_container_width=True)
-        vehicle_pie_chart_placeholder.plotly_chart(vehicle_pie_chart, use_container_width=True)
-
-        traffic_graph, cumulative_graph = update_traffic_graph(timestamp_data)
-        traffic_graph_placeholder.plotly_chart(traffic_graph, use_container_width=True)
-        cumulative_graph_placeholder.plotly_chart(cumulative_graph, use_container_width=True)
-
-        line_graph = update_timestamp_line_graph(timestamp_data)
-        timestamp_histogram_placeholder.plotly_chart(line_graph, use_container_width=True)
-
-elif detection_mode == "Upload Video":
-    uploaded_video = st.sidebar.file_uploader("Upload a Video", type=["mp4", "avi", "mov"])
-    
-    if uploaded_video is not None:
-        tfile = tempfile.NamedTemporaryFile(delete=False)
-        tfile.write(uploaded_video.read())
-        
-        cap = cv2.VideoCapture(tfile.name)
-
-        while cap.isOpened():
-            ret, frame = cap.read()
-            if not ret:
-                st.success("Video processing completed.")
-                break
+        if uploaded_image is not None:
+            image = Image.open(uploaded_image)
+            frame = np.array(image)
             
             results, current_class_count, frame_area, fps, inference_speed = process_frame(frame)
             
@@ -363,8 +344,8 @@ elif detection_mode == "Upload Video":
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
 
             rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            image = Image.fromarray(rgb_frame)
-            frame_placeholder.image(image, caption="Video Frame", width=320)
+            image_with_detections = Image.fromarray(rgb_frame)
+            st.image(image_with_detections, caption="Uploaded Image", use_column_width=True)
 
             histogram = update_histogram(current_class_count)
             pie_chart = calculate_area_proportions(results, frame_area)
@@ -381,6 +362,60 @@ elif detection_mode == "Upload Video":
             line_graph = update_timestamp_line_graph(timestamp_data)
             timestamp_histogram_placeholder.plotly_chart(line_graph, use_container_width=True)
 
-            time.sleep(0.03)
+    # Video upload detection mode
+    elif detection_mode == "Upload Video":
+        uploaded_video = st.sidebar.file_uploader("Upload a Video", type=["mp4", "avi", "mov"])
+        
+        if uploaded_video is not None:
+            tfile = tempfile.NamedTemporaryFile(delete=False)
+            tfile.write(uploaded_video.read())
+            
+            cap = cv2.VideoCapture(tfile.name)
 
-        cap.release()
+            while cap.isOpened():
+                ret, frame = cap.read()
+                if not ret:
+                    st.success("Video processing completed.")
+                    break
+                
+                results, current_class_count, frame_area, fps, inference_speed = process_frame(frame)
+                
+                total = sum(current_class_count.values())
+                total_objects.metric("Total Objects", total)
+                fps_display.metric("FPS", f"{fps:.2f}")
+                resolution_display.metric("Resolution", f"{frame.shape[1]}x{frame.shape[0]}")
+                inference_speed_display.metric("Inference Speed (ms)", f"{inference_speed:.2f}")
+
+                for *xyxy, conf, cls in results.xyxy[0]:
+                    if conf > confidence_threshold and model.names[int(cls)] in class_selection:
+                        label = f'{model.names[int(cls)]} {conf:.2f}'
+                        cv2.rectangle(frame, (int(xyxy[0]), int(xyxy[1])),
+                                      (int(xyxy[2]), int(xyxy[3])), (0, 255, 0), 2)
+                        cv2.putText(frame, label, (int(xyxy[0]), int(xyxy[1]) - 10),
+                                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+
+                rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                image = Image.fromarray(rgb_frame)
+                frame_placeholder.image(image, caption="Video Frame", width=320)
+
+                histogram = update_histogram(current_class_count)
+                pie_chart = calculate_area_proportions(results, frame_area)
+                vehicle_pie_chart = update_vehicle_proportion_chart(current_class_count)
+
+                histogram_placeholder.plotly_chart(histogram, use_container_width=True)
+                pie_chart_placeholder.plotly_chart(pie_chart, use_container_width=True)
+                vehicle_pie_chart_placeholder.plotly_chart(vehicle_pie_chart, use_container_width=True)
+
+                traffic_graph, cumulative_graph = update_traffic_graph(timestamp_data)
+                traffic_graph_placeholder.plotly_chart(traffic_graph, use_container_width=True)
+                cumulative_graph_placeholder.plotly_chart(cumulative_graph, use_container_width=True)
+
+                line_graph = update_timestamp_line_graph(timestamp_data)
+                timestamp_histogram_placeholder.plotly_chart(line_graph, use_container_width=True)
+
+                time.sleep(0.03)
+
+            cap.release()
+
+if __name__ == "__main__":
+    main()

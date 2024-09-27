@@ -6,7 +6,7 @@ import streamlit as st
 import plotly.express as px
 from PIL import Image
 import pandas as pd
-from datetime import datetime, timedelta
+from datetime import datetime
 import tempfile
 
 # Load YOLOv5 model
@@ -20,7 +20,7 @@ st.set_page_config(
     layout="wide",
 )
 
-st.title("Object Detection App")
+st.title("Object Detection Dashboard")
 
 # Sidebar for options
 st.sidebar.title("Settings")
@@ -48,13 +48,12 @@ detection_mode = st.sidebar.radio(
 # Confidence threshold slider
 confidence_threshold = st.sidebar.slider("Confidence Threshold", 0.0, 1.0, 0.5, 0.05)
 
-# Create a container for metrics and initialize metrics only once
-with st.container():
-    metric1, metric2, metric3, metric4 = st.columns(4)
-    total_objects = metric1.metric("Total Objects", "0")
-    fps_display = metric2.metric("FPS", "0")
-    resolution_display = metric3.metric("Resolution", "0x0")
-    inference_speed_display = metric4.metric("Inference Speed (ms)", "0")
+# Create a grid layout for key metrics at the top
+col1, col2, col3, col4 = st.columns(4)
+total_objects = col1.metric("Total Objects", "0")
+fps_display = col2.metric("FPS", "0")
+resolution_display = col3.metric("Resolution", "0x0")
+inference_speed_display = col4.metric("Inference Speed (ms)", "0")
 
 # Initialize class count dictionary and dataframe for timestamp logging
 class_count = {name: 0 for name in model.names.values()}
@@ -65,21 +64,18 @@ traffic_per_second = []
 cumulative_traffic = []
 start_time = datetime.now()
 
-# Define the function to update the traffic per second graph and cumulative traffic graph
+# Update the traffic graph and remove initial date on the x-axis
 def update_traffic_graph(timestamp_data):
     df = pd.DataFrame(timestamp_data)
-
-    print(df.head)
     
-    # Group by second to get traffic per second
     df['time'] = pd.to_datetime(df['time'], format='%H:%M:%S')
     
     df_second = df.groupby(df['time'].dt.floor('S')).size().reset_index(name='count_per_second')
-
-    # Update the cumulative traffic
     df_second['cumulative_count'] = df_second['count_per_second'].cumsum()
 
-    # Create traffic per second and cumulative graphs
+    # Formatting to only show time without the date
+    df_second['time'] = df_second['time'].dt.strftime('%H:%M:%S')
+
     traffic_graph = px.line(df_second, x='time', y='count_per_second', title="Traffic Per Second", template="plotly_dark")
     cumulative_graph = px.line(df_second, x='time', y='cumulative_count', title="Cumulative Traffic", template="plotly_dark")
 
@@ -109,7 +105,6 @@ def update_vehicle_proportion_chart(class_count):
 
 # Define the function to update the histogram
 def update_histogram(class_count):
-    # Filter out classes that have zero count
     filtered_class_count = {k: v for k, v in class_count.items() if v > 0}
     
     if filtered_class_count:
@@ -222,14 +217,13 @@ def process_frame(frame):
 
 # Initialize placeholders for the video and traffic data
 with st.container():
-    video_col, traffic_col = st.columns([3, 2])
+    video_col, traffic_col = st.columns([2, 3])  # Adjust width to fit
     with video_col:
         frame_placeholder = st.empty()
     with traffic_col:
         traffic_graph_placeholder = st.empty()
         cumulative_graph_placeholder = st.empty()
 
-# Initialize placeholders for the charts to be updated (object histogram, vehicle proportion, and area chart)
 with st.container():
     chart_col1, chart_col2, chart_col3 = st.columns(3)
     with chart_col1:
@@ -239,12 +233,11 @@ with st.container():
     with chart_col3:
         vehicle_pie_chart_placeholder = st.empty()
 
-# Initialize placeholder for the timestamp histogram (bar chart at the bottom)
+# Initialize placeholder for the timestamp histogram
 timestamp_histogram_placeholder = st.empty()
 
 # Start main app logic based on the mode
 if detection_mode == "Live Detection":
-    # Initialize webcam
     cap = cv2.VideoCapture(0)
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, 320)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
@@ -256,23 +249,20 @@ if detection_mode == "Live Detection":
             st.warning("Failed to read from webcam. Please check your webcam settings.")
             break
 
-        # Process the frame
         results, current_class_count, frame_area, fps, inference_speed = process_frame(frame)
 
-        # Update metrics
         total = sum(current_class_count.values())
         total_objects.metric("Total Objects", total)
         fps_display.metric("FPS", f"{fps:.2f}")
         resolution_display.metric("Resolution", f"{frame.shape[1]}x{frame.shape[0]}")
         inference_speed_display.metric("Inference Speed (ms)", f"{inference_speed:.2f}")
 
-        # Display detection results
         for *xyxy, conf, cls in results.xyxy[0]:
             if conf > confidence_threshold and model.names[int(cls)] in class_selection:
                 label = f'{model.names[int(cls)]} {conf:.2f}'
-                cv2.rectangle(frame, (int(xyxy[0]), int(xyxy[1])), 
+                cv2.rectangle(frame, (int(xyxy[0]), int(xyxy[1])),
                               (int(xyxy[2]), int(xyxy[3])), (0, 255, 0), 2)
-                cv2.putText(frame, label, (int(xyxy[0]), int(xyxy[1]) - 10), 
+                cv2.putText(frame, label, (int(xyxy[0]), int(xyxy[1]) - 10),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
 
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -288,16 +278,13 @@ if detection_mode == "Live Detection":
         pie_chart_placeholder.plotly_chart(pie_chart, use_container_width=True)
         vehicle_pie_chart_placeholder.plotly_chart(vehicle_pie_chart, use_container_width=True)
 
-        # Update traffic graphs (per second and cumulative)
         traffic_graph, cumulative_graph = update_traffic_graph(timestamp_data)
         traffic_graph_placeholder.plotly_chart(traffic_graph, use_container_width=True)
         cumulative_graph_placeholder.plotly_chart(cumulative_graph, use_container_width=True)
 
-        # Update timestamp histogram
         line_graph = update_timestamp_line_graph(timestamp_data)
         timestamp_histogram_placeholder.plotly_chart(line_graph, use_container_width=True)
 
-        # Add a small delay to prevent excessive CPU usage
         time.sleep(0.1)
 
     cap.release()
@@ -311,41 +298,36 @@ elif detection_mode == "Upload Image":
         
         results, current_class_count, frame_area, fps, inference_speed = process_frame(frame)
         
-        # Update metrics
         total = sum(current_class_count.values())
         total_objects.metric("Total Objects", total)
         fps_display.metric("FPS", f"{fps:.2f}")
         resolution_display.metric("Resolution", f"{frame.shape[1]}x{frame.shape[0]}")
         inference_speed_display.metric("Inference Speed (ms)", f"{inference_speed:.2f}")
 
-        # Display the image and results
         for *xyxy, conf, cls in results.xyxy[0]:
             if conf > confidence_threshold and model.names[int(cls)] in class_selection:
                 label = f'{model.names[int(cls)]} {conf:.2f}'
-                cv2.rectangle(frame, (int(xyxy[0]), int(xyxy[1])), 
+                cv2.rectangle(frame, (int(xyxy[0]), int(xyxy[1])),
                               (int(xyxy[2]), int(xyxy[3])), (0, 255, 0), 2)
-                cv2.putText(frame, label, (int(xyxy[0]), int(xyxy[1]) - 10), 
+                cv2.putText(frame, label, (int(xyxy[0]), int(xyxy[1]) - 10),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
 
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         image_with_detections = Image.fromarray(rgb_frame)
         st.image(image_with_detections, caption="Uploaded Image", use_column_width=True)
-        
-        # Display charts
+
         histogram = update_histogram(current_class_count)
         pie_chart = calculate_area_proportions(results, frame_area)
         vehicle_pie_chart = update_vehicle_proportion_chart(current_class_count)
-        
+
         histogram_placeholder.plotly_chart(histogram, use_container_width=True)
         pie_chart_placeholder.plotly_chart(pie_chart, use_container_width=True)
         vehicle_pie_chart_placeholder.plotly_chart(vehicle_pie_chart, use_container_width=True)
 
-        # Update traffic graphs (per second and cumulative)
         traffic_graph, cumulative_graph = update_traffic_graph(timestamp_data)
         traffic_graph_placeholder.plotly_chart(traffic_graph, use_container_width=True)
         cumulative_graph_placeholder.plotly_chart(cumulative_graph, use_container_width=True)
 
-        # Update timestamp histogram
         line_graph = update_timestamp_line_graph(timestamp_data)
         timestamp_histogram_placeholder.plotly_chart(line_graph, use_container_width=True)
 
@@ -353,43 +335,37 @@ elif detection_mode == "Upload Video":
     uploaded_video = st.sidebar.file_uploader("Upload a Video", type=["mp4", "avi", "mov"])
     
     if uploaded_video is not None:
-        # Create a temporary file to store the video
         tfile = tempfile.NamedTemporaryFile(delete=False)
         tfile.write(uploaded_video.read())
         
         cap = cv2.VideoCapture(tfile.name)
 
-        # Video processing loop
         while cap.isOpened():
             ret, frame = cap.read()
             if not ret:
                 st.success("Video processing completed.")
                 break
             
-            # Process the frame
             results, current_class_count, frame_area, fps, inference_speed = process_frame(frame)
             
-            # Update metrics
             total = sum(current_class_count.values())
             total_objects.metric("Total Objects", total)
             fps_display.metric("FPS", f"{fps:.2f}")
             resolution_display.metric("Resolution", f"{frame.shape[1]}x{frame.shape[0]}")
             inference_speed_display.metric("Inference Speed (ms)", f"{inference_speed:.2f}")
 
-            # Display detection results on the frame
             for *xyxy, conf, cls in results.xyxy[0]:
                 if conf > confidence_threshold and model.names[int(cls)] in class_selection:
                     label = f'{model.names[int(cls)]} {conf:.2f}'
-                    cv2.rectangle(frame, (int(xyxy[0]), int(xyxy[1])), 
+                    cv2.rectangle(frame, (int(xyxy[0]), int(xyxy[1])),
                                   (int(xyxy[2]), int(xyxy[3])), (0, 255, 0), 2)
-                    cv2.putText(frame, label, (int(xyxy[0]), int(xyxy[1]) - 10), 
+                    cv2.putText(frame, label, (int(xyxy[0]), int(xyxy[1]) - 10),
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
 
             rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             image = Image.fromarray(rgb_frame)
             frame_placeholder.image(image, caption="Video Frame", width=320)
 
-            # Update and display the charts
             histogram = update_histogram(current_class_count)
             pie_chart = calculate_area_proportions(results, frame_area)
             vehicle_pie_chart = update_vehicle_proportion_chart(current_class_count)
@@ -398,16 +374,13 @@ elif detection_mode == "Upload Video":
             pie_chart_placeholder.plotly_chart(pie_chart, use_container_width=True)
             vehicle_pie_chart_placeholder.plotly_chart(vehicle_pie_chart, use_container_width=True)
 
-            # Update traffic graphs (per second and cumulative)
             traffic_graph, cumulative_graph = update_traffic_graph(timestamp_data)
             traffic_graph_placeholder.plotly_chart(traffic_graph, use_container_width=True)
             cumulative_graph_placeholder.plotly_chart(cumulative_graph, use_container_width=True)
 
-            # Update timestamp histogram
             line_graph = update_timestamp_line_graph(timestamp_data)
             timestamp_histogram_placeholder.plotly_chart(line_graph, use_container_width=True)
 
-            # Add a small delay to match video FPS
             time.sleep(0.03)
 
         cap.release()

@@ -25,6 +25,15 @@ st.set_page_config(
 
 st.title("Object Detection Dashboard")
 
+# Add custom CSS to reduce scrolling and provide better layout
+st.markdown("""
+    <style>
+    .css-18e3th9 { padding-top: 1rem; padding-bottom: 1rem; }  /* Adjust padding */
+    .css-1d391kg { padding-top: 1rem; padding-bottom: 1rem; }  /* Adjust padding */
+    .stApp { overflow: hidden; }  /* Hide scrolling */
+    </style>
+    """, unsafe_allow_html=True)
+
 # Sidebar for options
 st.sidebar.title("Settings")
 
@@ -32,13 +41,19 @@ st.sidebar.title("Settings")
 class_selection = st.sidebar.multiselect(
     "Select Classes to Detect",
     options=list(model.names.values()),  # Ensure it's a list
-    default=list(model.names.values())   # Default to all classes
+    # default=list(model.names.values())   # Default to all classes
 )
 
 # Option to select static image/video upload or live detection
 detection_mode = st.sidebar.radio(
     "Detection Mode",
     ("Live Detection", "Upload Image", "Upload Video")
+)
+
+# Add weather dropdown to the sidebar
+weather_conditions = st.sidebar.selectbox(
+    "Select Weather Condition",
+    ("Normal", "Rainy", "Cloudy", "Foggy")
 )
 
 # Confidence threshold slider
@@ -60,6 +75,40 @@ traffic_per_second = []
 cumulative_traffic = []
 start_time = datetime.now()
 
+# Function to add rain effect on the image
+def add_rain(image):
+    rain_overlay = image.copy()
+    h, w, _ = image.shape
+    rain_drops = np.zeros_like(image, dtype=np.uint8)
+    for i in range(1000):  # Number of raindrops
+        x = np.random.randint(0, w)
+        y = np.random.randint(0, h)
+        rain_drops = cv2.line(rain_drops, (x, y), (x, y + np.random.randint(5, 20)), (200, 200, 200), 1)
+    
+    rain_overlay = cv2.addWeighted(rain_overlay, 0.8, rain_drops, 0.2, 0)
+    return rain_overlay
+
+# Function to add fog effect on the image
+def add_fog(image):
+    fog_overlay = image.copy()
+    fog = np.zeros_like(image, dtype=np.uint8)
+    fog = cv2.circle(fog, (fog.shape[1] // 2, fog.shape[0] // 2), fog.shape[1] // 3, (255, 255, 255), -1)
+    fog = cv2.GaussianBlur(fog, (61, 61), 0)
+    fog_overlay = cv2.addWeighted(fog_overlay, 0.8, fog, 0.2, 0)
+    return fog_overlay
+
+# Function to add cloudy effect on the image
+def add_cloud(image):
+    cloud_overlay = image.copy()
+    clouds = np.zeros_like(image, dtype=np.uint8)
+    for i in range(10):  # Number of clouds
+        x, y = np.random.randint(0, cloud_overlay.shape[1]), np.random.randint(0, cloud_overlay.shape[0] // 2)
+        radius = np.random.randint(50, 150)
+        clouds = cv2.circle(clouds, (x, y), radius, (200, 200, 200), -1)
+    clouds = cv2.GaussianBlur(clouds, (101, 101), 0)
+    cloud_overlay = cv2.addWeighted(cloud_overlay, 0.7, clouds, 0.3, 0)
+    return cloud_overlay
+
 # Update the traffic graph and remove initial date on the x-axis
 def update_traffic_graph(timestamp_data):
     df = pd.DataFrame(timestamp_data)
@@ -72,8 +121,8 @@ def update_traffic_graph(timestamp_data):
     # Formatting to only show time without the date
     df_second['time'] = df_second['time'].dt.strftime('%H:%M:%S')
 
-    traffic_graph = px.line(df_second, x='time', y='count_per_second', title="Traffic Per Second", template="plotly_dark")
-    cumulative_graph = px.line(df_second, x='time', y='cumulative_count', title="Cumulative Traffic", template="plotly_dark")
+    traffic_graph = px.line(df_second, x='time', y='count_per_second', title="Traffic Per Second", template="plotly_dark", height=250)
+    cumulative_graph = px.line(df_second, x='time', y='cumulative_count', title="Cumulative Traffic", template="plotly_dark", height=250)
 
     return traffic_graph, cumulative_graph
 
@@ -85,17 +134,17 @@ def update_vehicle_proportion_chart(class_count):
     if vehicle_count:
         vehicle_data = {"Vehicle Type": list(vehicle_count.keys()), "Count": list(vehicle_count.values())}
         df = pd.DataFrame(vehicle_data)
-        fig = px.pie(df, names="Vehicle Type", values="Count", title="Proportion of Vehicle Types Detected",
-                     template="plotly_dark", color_discrete_sequence=px.colors.sequential.RdBu)
+        fig = px.pie(df, names="Vehicle Type", values="Count", title="Vehicle Proportion",
+                     template="plotly_dark", color_discrete_sequence=px.colors.sequential.RdBu, height=250)
     else:
-        fig = px.pie(title="No Vehicles Detected", template="plotly_dark")
+        fig = px.pie(title="No Vehicles Detected", template="plotly_dark", height=250)
         fig.update_traces(marker=dict(colors=['grey']))
         fig.update_layout(annotations=[{
             'text': 'No Vehicles Detected',
             'xref': 'paper',
             'yref': 'paper',
             'showarrow': False,
-            'font': {'size': 28}
+            'font': {'size': 16}
         }])
     return fig
 
@@ -109,16 +158,16 @@ def update_histogram(class_count):
             "Count": list(filtered_class_count.values())
         }
         df = pd.DataFrame(class_data)
-        fig = px.bar(df, x="Classes", y="Count", title="Real-Time Object Detection Count",
-                     color="Classes", template="plotly_dark")
+        fig = px.bar(df, x="Classes", y="Count", title="Object Count",
+                     color="Classes", template="plotly_dark", height=250)
     else:
-        fig = px.bar(title="Waiting for Object Detection...", template="plotly_dark")
+        fig = px.bar(title="Waiting for Object Detection...", template="plotly_dark", height=250)
         fig.update_layout(xaxis={'visible': False}, yaxis={'visible': False}, annotations=[{
             'text': 'No Objects Detected',
             'xref': 'paper',
             'yref': 'paper',
             'showarrow': False,
-            'font': {'size': 28}
+            'font': {'size': 16}
         }])
     return fig
 
@@ -126,16 +175,16 @@ def update_histogram(class_count):
 def update_timestamp_line_graph(timestamp_data):
     df = pd.DataFrame(timestamp_data)
     if not df.empty:
-        fig = px.line(df, x="time", y="count", color="class", title="Object Detection Over Time",
-                      template="plotly_dark")
+        fig = px.line(df, x="time", y="count", color="class", title="Detection Over Time",
+                      template="plotly_dark", height=250)
     else:
-        fig = px.line(title="No Data to Display Yet", template="plotly_dark")
+        fig = px.line(title="No Data to Display Yet", template="plotly_dark", height=250)
         fig.update_layout(xaxis={'visible': False}, yaxis={'visible': False}, annotations=[{
             'text': 'No Objects Detected Yet',
             'xref': 'paper',
             'yref': 'paper',
             'showarrow': False,
-            'font': {'size': 28}
+            'font': {'size': 16}
         }])
     return fig
 
@@ -161,17 +210,17 @@ def calculate_area_proportions(results, frame_area):
             "Area": [area / frame_area * 100 for area in filtered_area_dict.values()]
         }
         df = pd.DataFrame(area_data)
-        fig = px.pie(df, names="Classes", values="Area", title="Proportion of Frame Covered by Objects",
-                     template="plotly_dark", color_discrete_sequence=px.colors.sequential.RdBu)
+        fig = px.pie(df, names="Classes", values="Area", title="Area Proportion",
+                     template="plotly_dark", color_discrete_sequence=px.colors.sequential.RdBu, height=250)
     else:
-        fig = px.pie(title="No Objects Detected", template="plotly_dark")
+        fig = px.pie(title="No Objects Detected", template="plotly_dark", height=250)
         fig.update_traces(marker=dict(colors=['grey']))
         fig.update_layout(annotations=[{
             'text': 'No Objects Detected',
             'xref': 'paper',
             'yref': 'paper',
             'showarrow': False,
-            'font': {'size': 28}
+            'font': {'size': 16}
         }])
     
     return fig
@@ -184,9 +233,19 @@ def calculate_inference_speed(start_time, end_time):
 def calculate_fps(start_time, end_time):
     return 1 / (end_time - start_time) if (end_time - start_time) > 0 else 0
 
-# Define the main detection function for processing frames
+# Function to process frames and update the real-time charts
 def process_frame(frame):
     start_time = time.time()
+
+    # Apply selected weather effect
+    if weather_conditions == "Rainy":
+        frame = add_rain(frame)
+    elif weather_conditions == "Cloudy":
+        frame = add_cloud(frame)
+    elif weather_conditions == "Foggy":
+        frame = add_fog(frame)
+
+    # Object detection on modified frame
     results = model(frame)
     end_time = time.time()
     
@@ -211,26 +270,6 @@ def process_frame(frame):
 
     return results, class_count, frame_area, fps, inference_speed
 
-# Initialize placeholders for the video and traffic data
-with st.container():
-    video_col, traffic_col = st.columns([2, 3])  # Adjust width to fit
-    with video_col:
-        frame_placeholder = st.empty()
-    with traffic_col:
-        traffic_graph_placeholder = st.empty()
-        cumulative_graph_placeholder = st.empty()
-
-with st.container():
-    chart_col1, chart_col2, chart_col3 = st.columns(3)
-    with chart_col1:
-        histogram_placeholder = st.empty()
-    with chart_col2:
-        pie_chart_placeholder = st.empty()
-    with chart_col3:
-        vehicle_pie_chart_placeholder = st.empty()
-
-# Initialize placeholder for the timestamp histogram
-timestamp_histogram_placeholder = st.empty()
 # YOLOv5 video processor class for WebRTC live streaming
 class YOLOv5VideoProcessor(VideoProcessorBase):
     def __init__(self):
@@ -270,14 +309,19 @@ class YOLOv5VideoProcessor(VideoProcessorBase):
 
 # Main logic to switch between detection modes (Live, Image, Video)
 def main():
-    frame_placeholder = st.empty()
-    histogram_placeholder = st.empty()
-    pie_chart_placeholder = st.empty()
-    vehicle_pie_chart_placeholder = st.empty()
-    traffic_graph_placeholder = st.empty()
-    cumulative_graph_placeholder = st.empty()
-    timestamp_histogram_placeholder = st.empty()
+    col1, col2, col3 = st.columns([1, 2, 1])
 
+    with col1:
+        histogram_placeholder = st.empty()
+        vehicle_pie_chart_placeholder = st.empty()
+    
+    with col2:
+        pie_chart_placeholder = st.empty()
+    
+    with col3:
+        traffic_graph_placeholder = st.empty()
+        cumulative_graph_placeholder = st.empty()
+    
     # WebRTC Live Detection mode
     if detection_mode == "Live Detection":
         ctx = webrtc_streamer(
@@ -291,6 +335,9 @@ def main():
             async_processing=True,
         )
 
+        # Create a placeholder outside the loop
+        frame_placeholder = st.empty()
+
         # Loop for continuously updating metrics while webcam is running
         while ctx.state.playing:
             if ctx.video_processor:
@@ -298,13 +345,13 @@ def main():
                 if hasattr(processor, 'lock'):
                     with processor.lock:  # Ensure thread-safe access to the processor state
                         if processor.results:
-                            # Update metrics and charts
                             total = sum(processor.current_class_count.values())
                             total_objects.metric("Total Objects", total)
                             fps_display.metric("FPS", f"{processor.fps:.2f}")
                             resolution_display.metric("Resolution", f"{640}x{480}")
                             inference_speed_display.metric("Inference Speed (ms)", f"{processor.inference_speed:.2f}")
-                            
+
+                            # Update charts
                             histogram = update_histogram(processor.current_class_count)
                             pie_chart = calculate_area_proportions(processor.results, processor.frame_area)
                             vehicle_pie_chart = update_vehicle_proportion_chart(processor.current_class_count)
@@ -317,10 +364,11 @@ def main():
                             traffic_graph_placeholder.plotly_chart(traffic_graph, use_container_width=True)
                             cumulative_graph_placeholder.plotly_chart(cumulative_graph, use_container_width=True)
 
-                            line_graph = update_timestamp_line_graph(timestamp_data)
-                            timestamp_histogram_placeholder.plotly_chart(line_graph, use_container_width=True)
+                            # Update the video frame in the same placeholder
+                            frame_placeholder.image(processor.results.render()[0], caption="Video Frame", use_column_width=True)
 
-            time.sleep(0.1)  # Add a small sleep to avoid consuming too many resources
+            time.sleep(0.1)  # Small sleep to prevent resource overconsumption
+
 
     # Image upload detection mode
     elif detection_mode == "Upload Image":
@@ -362,12 +410,10 @@ def main():
             traffic_graph_placeholder.plotly_chart(traffic_graph, use_container_width=True)
             cumulative_graph_placeholder.plotly_chart(cumulative_graph, use_container_width=True)
 
-            line_graph = update_timestamp_line_graph(timestamp_data)
-            timestamp_histogram_placeholder.plotly_chart(line_graph, use_container_width=True)
-
     # Video upload detection mode
     elif detection_mode == "Upload Video":
         uploaded_video = st.sidebar.file_uploader("Upload a Video", type=["mp4", "avi", "mov"])
+        frame_placeholder = st.empty()
         
         if uploaded_video is not None:
             tfile = tempfile.NamedTemporaryFile(delete=False)
@@ -375,14 +421,17 @@ def main():
             
             cap = cv2.VideoCapture(tfile.name)
 
+            # Create a placeholder for the video frames
+            frame_placeholder = st.empty()
+
             while cap.isOpened():
                 ret, frame = cap.read()
                 if not ret:
                     st.success("Video processing completed.")
                     break
-                
+
                 results, current_class_count, frame_area, fps, inference_speed = process_frame(frame)
-                
+
                 total = sum(current_class_count.values())
                 total_objects.metric("Total Objects", total)
                 fps_display.metric("FPS", f"{fps:.2f}")
@@ -392,14 +441,14 @@ def main():
                 for *xyxy, conf, cls in results.xyxy[0]:
                     if conf > confidence_threshold and model.names[int(cls)] in class_selection:
                         label = f'{model.names[int(cls)]} {conf:.2f}'
-                        cv2.rectangle(frame, (int(xyxy[0]), int(xyxy[1])),
-                                      (int(xyxy[2]), int(xyxy[3])), (0, 255, 0), 2)
-                        cv2.putText(frame, label, (int(xyxy[0]), int(xyxy[1]) - 10),
-                                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+                        cv2.rectangle(frame, (int(xyxy[0]), int(xyxy[1])), (int(xyxy[2]), int(xyxy[3])), (0, 255, 0), 2)
+                        cv2.putText(frame, label, (int(xyxy[0]), int(xyxy[1]) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
 
                 rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 image = Image.fromarray(rgb_frame)
-                frame_placeholder.image(image, caption="Video Frame", width=320)
+
+                # Update the video frame in the same placeholder
+                frame_placeholder.image(image, caption="Video Frame", use_column_width=True)
 
                 histogram = update_histogram(current_class_count)
                 pie_chart = calculate_area_proportions(results, frame_area)
@@ -413,12 +462,10 @@ def main():
                 traffic_graph_placeholder.plotly_chart(traffic_graph, use_container_width=True)
                 cumulative_graph_placeholder.plotly_chart(cumulative_graph, use_container_width=True)
 
-                line_graph = update_timestamp_line_graph(timestamp_data)
-                timestamp_histogram_placeholder.plotly_chart(line_graph, use_container_width=True)
-
                 time.sleep(0.03)
 
             cap.release()
+
 
 if __name__ == "__main__":
     main()

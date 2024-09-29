@@ -9,3 +9,4 @@ ultralytics
 setuptools>=58.0.0
 wheel
 streamlit_webrtc
+inotify

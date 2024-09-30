@@ -433,8 +433,17 @@ def main():
                 total_objects, fps_value, resolution_width, resolution_height, inference_speed_value
             )
 
+            for *xyxy, conf, cls in results.xyxy[0]:
+                    if conf > confidence_threshold and model.names[int(cls)] in class_selection:
+                        label = f'{model.names[int(cls)]} {conf:.2f}'
+                        cv2.rectangle(frame, (int(xyxy[0]), int(xyxy[1])), (int(xyxy[2]), int(xyxy[3])), (0, 255, 0), 2)
+                        cv2.putText(frame, label, (int(xyxy[0]), int(xyxy[1]) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
 
             rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            image = Image.fromarray(rgb_frame)
+
+
+            # rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             image_with_detections = Image.fromarray(rgb_frame)
             frame_placeholder.image(image_with_detections, caption="Uploaded Image", use_column_width=True)
 

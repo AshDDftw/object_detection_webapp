@@ -25,30 +25,65 @@ st.set_page_config(
 
 st.title("Object Detection Dashboard")
 
-# Add custom CSS for background and colored blocks
+# Add custom CSS for background, colors, and padding between sections
 st.markdown("""
     <style>
     .css-18e3th9 { padding-top: 1rem; padding-bottom: 1rem; }
     .css-1d391kg { padding-top: 1rem; padding-bottom: 1rem; }
-    .stApp { background-color: #800080; } /* Bright purple background */
-    .block1 { background-color: #f94144; padding: 10px; border-radius: 10px; color: white; } /* Red */
-    .block2 { background-color: #f3722c; padding: 10px; border-radius: 10px; color: white; } /* Orange */
-    .block3 { background-color: #f9c74f; padding: 10px; border-radius: 10px; color: black; } /* Yellow */
-    .block4 { background-color: #43aa8b; padding: 10px; border-radius: 10px; color: white; } /* Green */
-    .plotly-graph {
-        background-color: #800080 !important; /* Set chart background same as page */
+    .stApp { background-color: #6b38b5; } /* Bright purple background */
+    .block { 
+        background-color: #f94144; 
+        padding: 10px; 
+        border-radius: 10px; 
+        color: white; 
+        text-align: center; 
+        margin-bottom: 10px;
+    }
+    .block-orange { 
+        background-color: #f3722c; 
+        padding: 10px; 
+        border-radius: 10px; 
+        color: white; 
+        text-align: center; 
+        margin-bottom: 10px;
+    }
+    .block-yellow { 
+        background-color: #f9c74f; 
+        padding: 10px; 
+        border-radius: 10px; 
+        color: black; 
+        text-align: center; 
+        margin-bottom: 10px;
+    }
+    .block-green { 
+        background-color: #43aa8b; 
+        padding: 10px; 
+        border-radius: 10px; 
+        color: white; 
+        text-align: center; 
+        margin-bottom: 10px;
+    }
+    .section { 
+        margin-bottom: 20px;
     }
     </style>
     """, unsafe_allow_html=True)
 
+
 # Sidebar for options
 st.sidebar.title("Settings")
 
-# Option for class-wise selection
+# Option for class-wise selection (no default selection)
 class_selection = st.sidebar.multiselect(
     "Select Classes to Detect",
-    options=list(model.names.values()),  # Ensure it's a list
+    options=list(model.names.values()),  # List all available class names in the multiselect options
+    default=None  # No default classes pre-selected
 )
+
+# Ensure all classes are detected if no specific classes are selected
+if not class_selection or len(class_selection) == 0:
+    class_selection = list(model.names.values())  # Detect all classes by default
+
 
 # Option to select static image/video upload or live detection
 detection_mode = st.sidebar.radio(
@@ -59,7 +94,7 @@ detection_mode = st.sidebar.radio(
 # Add weather dropdown to the sidebar
 weather_conditions = st.sidebar.selectbox(
     "Select Weather Condition",
-    ("Normal", "Rainy", "Cloudy", "Foggy")
+    ("Normal", "Rainy", "Cloudy", "Foggy","Other")
 )
 
 # Confidence threshold slider
@@ -92,7 +127,7 @@ with col4:
 # Function to update the placeholders with the real values dynamically
 def update_metric_blocks(total_objects, fps_value, resolution_width, resolution_height, inference_speed_value):
     total_objects_placeholder.markdown(f"""
-        <div style="background-color: #f94144; padding: 10px; border-radius: 10px; color: white; text-align: center;">
+        <div style="background-color: #f94144; padding: 10px; border-radius: 10px;margin:10px color: white; text-align: center;">
             <h3>Total Objects</h3>
             <h2>{total_objects}</h2>
         </div>
@@ -113,8 +148,8 @@ def update_metric_blocks(total_objects, fps_value, resolution_width, resolution_
     """, unsafe_allow_html=True)
 
     inference_speed_placeholder.markdown(f"""
-        <div style="background-color: #43aa8b; padding: 10px; border-radius: 10px; color: white; text-align: center;">
-            <h3>Inference Speed (ms)</h3>
+        <div style="background-color: #43aa8b; padding: 10px; border-radius: 10px;margin-bottom:10px color: white; text-align: center;">
+            <h3>Inference(ms)</h3>
             <h2>{inference_speed_value:.2f}</h2>
         </div>
     """, unsafe_allow_html=True)
@@ -129,38 +164,38 @@ cumulative_traffic = []
 start_time = datetime.now()
 
 # Function to add rain effect on the image
-def add_rain(image):
-    rain_overlay = image.copy()
-    h, w, _ = image.shape
-    rain_drops = np.zeros_like(image, dtype=np.uint8)
-    for i in range(1000):  # Number of raindrops
-        x = np.random.randint(0, w)
-        y = np.random.randint(0, h)
-        rain_drops = cv2.line(rain_drops, (x, y), (x, y + np.random.randint(5, 20)), (200, 200, 200), 1)
+# def add_rain(image):
+#     rain_overlay = image.copy()
+#     h, w, _ = image.shape
+#     rain_drops = np.zeros_like(image, dtype=np.uint8)
+#     for i in range(1000):  # Number of raindrops
+#         x = np.random.randint(0, w)
+#         y = np.random.randint(0, h)
+#         rain_drops = cv2.line(rain_drops, (x, y), (x, y + np.random.randint(5, 20)), (200, 200, 200), 1)
     
-    rain_overlay = cv2.addWeighted(rain_overlay, 0.8, rain_drops, 0.2, 0)
-    return rain_overlay
+#     rain_overlay = cv2.addWeighted(rain_overlay, 0.8, rain_drops, 0.2, 0)
+#     return rain_overlay
 
-# Function to add fog effect on the image
-def add_fog(image):
-    fog_overlay = image.copy()
-    fog = np.zeros_like(image, dtype=np.uint8)
-    fog = cv2.circle(fog, (fog.shape[1] // 2, fog.shape[0] // 2), fog.shape[1] // 3, (255, 255, 255), -1)
-    fog = cv2.GaussianBlur(fog, (61, 61), 0)
-    fog_overlay = cv2.addWeighted(fog_overlay, 0.8, fog, 0.2, 0)
-    return fog_overlay
+# # Function to add fog effect on the image
+# def add_fog(image):
+#     fog_overlay = image.copy()
+#     fog = np.zeros_like(image, dtype=np.uint8)
+#     fog = cv2.circle(fog, (fog.shape[1] // 2, fog.shape[0] // 2), fog.shape[1] // 3, (255, 255, 255), -1)
+#     fog = cv2.GaussianBlur(fog, (61, 61), 0)
+#     fog_overlay = cv2.addWeighted(fog_overlay, 0.8, fog, 0.2, 0)
+#     return fog_overlay
 
-# Function to add cloudy effect on the image
-def add_cloud(image):
-    cloud_overlay = image.copy()
-    clouds = np.zeros_like(image, dtype=np.uint8)
-    for i in range(10):  # Number of clouds
-        x, y = np.random.randint(0, cloud_overlay.shape[1]), np.random.randint(0, cloud_overlay.shape[0] // 2)
-        radius = np.random.randint(50, 150)
-        clouds = cv2.circle(clouds, (x, y), radius, (200, 200, 200), -1)
-    clouds = cv2.GaussianBlur(clouds, (101, 101), 0)
-    cloud_overlay = cv2.addWeighted(cloud_overlay, 0.7, clouds, 0.3, 0)
-    return cloud_overlay
+# # Function to add cloudy effect on the image
+# def add_cloud(image):
+#     cloud_overlay = image.copy()
+#     clouds = np.zeros_like(image, dtype=np.uint8)
+#     for i in range(10):  # Number of clouds
+#         x, y = np.random.randint(0, cloud_overlay.shape[1]), np.random.randint(0, cloud_overlay.shape[0] // 2)
+#         radius = np.random.randint(50, 150)
+#         clouds = cv2.circle(clouds, (x, y), radius, (200, 200, 200), -1)
+#     clouds = cv2.GaussianBlur(clouds, (101, 101), 0)
+#     cloud_overlay = cv2.addWeighted(cloud_overlay, 0.7, clouds, 0.3, 0)
+#     return cloud_overlay
 
 # Update the traffic graph and remove initial date on the x-axis
 def update_traffic_graph(timestamp_data):
@@ -273,13 +308,13 @@ def calculate_fps(start_time, end_time):
 def process_frame(frame):
     start_time = time.time()
 
-    # Apply selected weather effect
-    if weather_conditions == "Rainy":
-        frame = add_rain(frame)
-    elif weather_conditions == "Cloudy":
-        frame = add_cloud(frame)
-    elif weather_conditions == "Foggy":
-        frame = add_fog(frame)
+    # # Apply selected weather effect
+    # if weather_conditions == "Rainy":
+    #     frame = add_rain(frame)
+    # elif weather_conditions == "Cloudy":
+    #     frame = add_cloud(frame)
+    # elif weather_conditions == "Foggy":
+    #     frame = add_fog(frame)
 
     # Object detection on modified frame
     results = model(frame)
@@ -345,24 +380,26 @@ class YOLOv5VideoProcessor(VideoProcessorBase):
 
 # Main logic to switch between detection modes (Live, Image, Video)
 def main():
+    # Layout and placement of different sections within a single frame with padding
     col1, col2, col3 = st.columns([1, 2, 1])
 
-    # Add placeholder for the detection result frame (below the metrics)
-    # frame_placeholder = st.empty()
-
     with col1:
+        st.markdown('<div class="section">', unsafe_allow_html=True)
         histogram_placeholder = st.empty()
         vehicle_pie_chart_placeholder = st.empty()
-        pie_chart_placeholder = st.empty()
-    
+        st.markdown('</div>', unsafe_allow_html=True)
+
     with col2:
-        # Create the video placeholder between metrics and charts
-        frame_placeholder = st.empty()
-        pie_chart_placeholder = st.empty()
-    
+        st.markdown('<div class="section">', unsafe_allow_html=True)
+        frame_placeholder = st.empty()  # Video frame placeholder
+        pie_chart_placeholder=st.empty()
+        st.markdown('</div>', unsafe_allow_html=True)
+
     with col3:
+        st.markdown('<div class="section">', unsafe_allow_html=True)
         traffic_graph_placeholder = st.empty()
         cumulative_graph_placeholder = st.empty()
+        st.markdown('</div>', unsafe_allow_html=True)
     
     if detection_mode == "Live Detection":
         ctx = webrtc_streamer(
@@ -395,8 +432,11 @@ def main():
                                 total_objects, fps_value, resolution_width, resolution_height, inference_speed_value
                             )
 
+                            rgb_frame = cv2.cvtColor(processor.results.render()[0], cv2.COLOR_BGR2RGB)
+                            frame_placeholder.image(rgb_frame, caption="Video Frame", use_column_width=True)
+
                             # Update the video frame below the metrics and above the graphs
-                            frame_placeholder.image(processor.results.render()[0], caption="Video Frame", use_column_width=True)
+                            # frame_placeholder.image(processor.results.render()[0], caption="Video Frame", use_column_width=True)
 
                             # Update charts below the video frame
                             histogram = update_histogram(processor.current_class_count)
@@ -439,13 +479,12 @@ def main():
                         cv2.rectangle(frame, (int(xyxy[0]), int(xyxy[1])), (int(xyxy[2]), int(xyxy[3])), (0, 255, 0), 2)
                         cv2.putText(frame, label, (int(xyxy[0]), int(xyxy[1]) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
 
-            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            image = Image.fromarray(rgb_frame)
-
-
-            # rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            image_with_detections = Image.fromarray(rgb_frame)
+            # Convert BGR to RGB before displaying the image
+            # rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)  # Ensure correct color conversion
+            image_with_detections = Image.fromarray(frame)  # Convert back to PIL Image for display
             frame_placeholder.image(image_with_detections, caption="Uploaded Image", use_column_width=True)
+
+            
 
             histogram = update_histogram(current_class_count)
             pie_chart = calculate_area_proportions(results, frame_area)
@@ -498,11 +537,10 @@ def main():
                         cv2.rectangle(frame, (int(xyxy[0]), int(xyxy[1])), (int(xyxy[2]), int(xyxy[3])), (0, 255, 0), 2)
                         cv2.putText(frame, label, (int(xyxy[0]), int(xyxy[1]) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
 
+                # Convert the frame from BGR to RGB after processing before rendering
                 rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                image = Image.fromarray(rgb_frame)
+                frame_placeholder.image(rgb_frame, caption="Video Frame", use_column_width=True)
 
-                # Update the video frame in the same placeholder
-                frame_placeholder.image(image, caption="Video Frame", use_column_width=True)
 
                 histogram = update_histogram(current_class_count)
                 pie_chart = calculate_area_proportions(results, frame_area)

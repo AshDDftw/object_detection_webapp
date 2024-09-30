@@ -25,12 +25,19 @@ st.set_page_config(
 
 st.title("Object Detection Dashboard")
 
-# Add custom CSS to reduce scrolling and provide better layout
+# Add custom CSS for background and colored blocks
 st.markdown("""
     <style>
-    .css-18e3th9 { padding-top: 1rem; padding-bottom: 1rem; }  /* Adjust padding */
-    .css-1d391kg { padding-top: 1rem; padding-bottom: 1rem; }  /* Adjust padding */
-    .stApp { overflow: hidden; }  /* Hide scrolling */
+    .css-18e3th9 { padding-top: 1rem; padding-bottom: 1rem; }
+    .css-1d391kg { padding-top: 1rem; padding-bottom: 1rem; }
+    .stApp { background-color: #800080; } /* Bright purple background */
+    .block1 { background-color: #f94144; padding: 10px; border-radius: 10px; color: white; } /* Red */
+    .block2 { background-color: #f3722c; padding: 10px; border-radius: 10px; color: white; } /* Orange */
+    .block3 { background-color: #f9c74f; padding: 10px; border-radius: 10px; color: black; } /* Yellow */
+    .block4 { background-color: #43aa8b; padding: 10px; border-radius: 10px; color: white; } /* Green */
+    .plotly-graph {
+        background-color: #800080 !important; /* Set chart background same as page */
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -41,7 +48,6 @@ st.sidebar.title("Settings")
 class_selection = st.sidebar.multiselect(
     "Select Classes to Detect",
     options=list(model.names.values()),  # Ensure it's a list
-    # default=list(model.names.values())   # Default to all classes
 )
 
 # Option to select static image/video upload or live detection
@@ -59,12 +65,59 @@ weather_conditions = st.sidebar.selectbox(
 # Confidence threshold slider
 confidence_threshold = st.sidebar.slider("Confidence Threshold", 0.0, 1.0, 0.5, 0.05)
 
-# Create a grid layout for key metrics at the top
+# Create placeholders for the metrics to update later
+
+# Variables to hold actual values
+total_objects = 0
+fps_display = 0.0
+resolution_width = 0
+resolution_height = 0
+inference_speed_display = 0.0
+
+# Create placeholders for the metrics to update later
 col1, col2, col3, col4 = st.columns(4)
-total_objects = col1.metric("Total Objects", "0")
-fps_display = col2.metric("FPS", "0")
-resolution_display = col3.metric("Resolution", "0x0")
-inference_speed_display = col4.metric("Inference Speed (ms)", "0")
+
+with col1:
+    total_objects_placeholder = st.empty()
+
+with col2:
+    fps_placeholder = st.empty()
+
+with col3:
+    resolution_placeholder = st.empty()
+
+with col4:
+    inference_speed_placeholder = st.empty()
+
+# Function to update the placeholders with the real values dynamically
+def update_metric_blocks(total_objects, fps_value, resolution_width, resolution_height, inference_speed_value):
+    total_objects_placeholder.markdown(f"""
+        <div style="background-color: #f94144; padding: 10px; border-radius: 10px; color: white; text-align: center;">
+            <h3>Total Objects</h3>
+            <h2>{total_objects}</h2>
+        </div>
+    """, unsafe_allow_html=True)
+
+    fps_placeholder.markdown(f"""
+        <div style="background-color: #f3722c; padding: 10px; border-radius: 10px; color: white; text-align: center;">
+            <h3>FPS</h3>
+            <h2>{fps_value:.2f}</h2>
+        </div>
+    """, unsafe_allow_html=True)
+
+    resolution_placeholder.markdown(f"""
+        <div style="background-color: #f9c74f; padding: 10px; border-radius: 10px; color: black; text-align: center;">
+            <h3>Resolution</h3>
+            <h2>{resolution_width}x{resolution_height}</h2>
+        </div>
+    """, unsafe_allow_html=True)
+
+    inference_speed_placeholder.markdown(f"""
+        <div style="background-color: #43aa8b; padding: 10px; border-radius: 10px; color: white; text-align: center;">
+            <h3>Inference Speed (ms)</h3>
+            <h2>{inference_speed_value:.2f}</h2>
+        </div>
+    """, unsafe_allow_html=True)
 
 # Initialize class count dictionary and dataframe for timestamp logging
 class_count = {name: 0 for name in model.names.values()}
@@ -164,23 +217,6 @@ def update_histogram(class_count):
         fig = px.bar(title="Waiting for Object Detection...", template="plotly_dark", height=250)
         fig.update_layout(xaxis={'visible': False}, yaxis={'visible': False}, annotations=[{
             'text': 'No Objects Detected',
-            'xref': 'paper',
-            'yref': 'paper',
-            'showarrow': False,
-            'font': {'size': 16}
-        }])
-    return fig
-
-# Define the function to update the timestamp line graph
-def update_timestamp_line_graph(timestamp_data):
-    df = pd.DataFrame(timestamp_data)
-    if not df.empty:
-        fig = px.line(df, x="time", y="count", color="class", title="Detection Over Time",
-                      template="plotly_dark", height=250)
-    else:
-        fig = px.line(title="No Data to Display Yet", template="plotly_dark", height=250)
-        fig.update_layout(xaxis={'visible': False}, yaxis={'visible': False}, annotations=[{
-            'text': 'No Objects Detected Yet',
             'xref': 'paper',
             'yref': 'paper',
             'showarrow': False,
@@ -311,18 +347,23 @@ class YOLOv5VideoProcessor(VideoProcessorBase):
 def main():
     col1, col2, col3 = st.columns([1, 2, 1])
 
+    # Add placeholder for the detection result frame (below the metrics)
+    # frame_placeholder = st.empty()
+
     with col1:
         histogram_placeholder = st.empty()
         vehicle_pie_chart_placeholder = st.empty()
+        pie_chart_placeholder = st.empty()
     
     with col2:
+        # Create the video placeholder between metrics and charts
+        frame_placeholder = st.empty()
         pie_chart_placeholder = st.empty()
     
     with col3:
         traffic_graph_placeholder = st.empty()
         cumulative_graph_placeholder = st.empty()
     
-    # WebRTC Live Detection mode
     if detection_mode == "Live Detection":
         ctx = webrtc_streamer(
             key="object-detection",
@@ -335,9 +376,6 @@ def main():
             async_processing=True,
         )
 
-        # Create a placeholder outside the loop
-        frame_placeholder = st.empty()
-
         # Loop for continuously updating metrics while webcam is running
         while ctx.state.playing:
             if ctx.video_processor:
@@ -345,13 +383,22 @@ def main():
                 if hasattr(processor, 'lock'):
                     with processor.lock:  # Ensure thread-safe access to the processor state
                         if processor.results:
-                            total = sum(processor.current_class_count.values())
-                            total_objects.metric("Total Objects", total)
-                            fps_display.metric("FPS", f"{processor.fps:.2f}")
-                            resolution_display.metric("Resolution", f"{640}x{480}")
-                            inference_speed_display.metric("Inference Speed (ms)", f"{processor.inference_speed:.2f}")
+                            # Calculate the metrics
+                            total_objects = sum(processor.current_class_count.values())
+                            fps_value = processor.fps
+                            resolution_width = 640
+                            resolution_height = 480
+                            inference_speed_value = processor.inference_speed
 
-                            # Update charts
+                            # Update the four colored blocks dynamically
+                            update_metric_blocks(
+                                total_objects, fps_value, resolution_width, resolution_height, inference_speed_value
+                            )
+
+                            # Update the video frame below the metrics and above the graphs
+                            frame_placeholder.image(processor.results.render()[0], caption="Video Frame", use_column_width=True)
+
+                            # Update charts below the video frame
                             histogram = update_histogram(processor.current_class_count)
                             pie_chart = calculate_area_proportions(processor.results, processor.frame_area)
                             vehicle_pie_chart = update_vehicle_proportion_chart(processor.current_class_count)
@@ -364,39 +411,32 @@ def main():
                             traffic_graph_placeholder.plotly_chart(traffic_graph, use_container_width=True)
                             cumulative_graph_placeholder.plotly_chart(cumulative_graph, use_container_width=True)
 
-                            # Update the video frame in the same placeholder
-                            frame_placeholder.image(processor.results.render()[0], caption="Video Frame", use_column_width=True)
-
             time.sleep(0.1)  # Small sleep to prevent resource overconsumption
-
 
     # Image upload detection mode
     elif detection_mode == "Upload Image":
         uploaded_image = st.sidebar.file_uploader("Upload an Image", type=["jpg", "jpeg", "png"])
-        
         if uploaded_image is not None:
             image = Image.open(uploaded_image)
             frame = np.array(image)
             
             results, current_class_count, frame_area, fps, inference_speed = process_frame(frame)
             
-            total = sum(current_class_count.values())
-            total_objects.metric("Total Objects", total)
-            fps_display.metric("FPS", f"{fps:.2f}")
-            resolution_display.metric("Resolution", f"{frame.shape[1]}x{frame.shape[0]}")
-            inference_speed_display.metric("Inference Speed (ms)", f"{inference_speed:.2f}")
+            total_objects = sum(current_class_count.values())
+            fps_value = fps
+            resolution_width = frame.shape[1]
+            resolution_height = frame.shape[0]
+            inference_speed_value = inference_speed
 
-            for *xyxy, conf, cls in results.xyxy[0]:
-                if conf > confidence_threshold and model.names[int(cls)] in class_selection:
-                    label = f'{model.names[int(cls)]} {conf:.2f}'
-                    cv2.rectangle(frame, (int(xyxy[0]), int(xyxy[1])),
-                                  (int(xyxy[2]), int(xyxy[3])), (0, 255, 0), 2)
-                    cv2.putText(frame, label, (int(xyxy[0]), int(xyxy[1]) - 10),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+            # Update the four colored blocks dynamically
+            update_metric_blocks(
+                total_objects, fps_value, resolution_width, resolution_height, inference_speed_value
+            )
+
 
             rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             image_with_detections = Image.fromarray(rgb_frame)
-            st.image(image_with_detections, caption="Uploaded Image", use_column_width=True)
+            frame_placeholder.image(image_with_detections, caption="Uploaded Image", use_column_width=True)
 
             histogram = update_histogram(current_class_count)
             pie_chart = calculate_area_proportions(results, frame_area)
@@ -413,7 +453,7 @@ def main():
     # Video upload detection mode
     elif detection_mode == "Upload Video":
         uploaded_video = st.sidebar.file_uploader("Upload a Video", type=["mp4", "avi", "mov"])
-        frame_placeholder = st.empty()
+        # frame_placeholder = st.empty()
         
         if uploaded_video is not None:
             tfile = tempfile.NamedTemporaryFile(delete=False)
@@ -422,7 +462,7 @@ def main():
             cap = cv2.VideoCapture(tfile.name)
 
             # Create a placeholder for the video frames
-            frame_placeholder = st.empty()
+            # frame_placeholder = st.empty()
 
             while cap.isOpened():
                 ret, frame = cap.read()
@@ -432,11 +472,16 @@ def main():
 
                 results, current_class_count, frame_area, fps, inference_speed = process_frame(frame)
 
-                total = sum(current_class_count.values())
-                total_objects.metric("Total Objects", total)
-                fps_display.metric("FPS", f"{fps:.2f}")
-                resolution_display.metric("Resolution", f"{frame.shape[1]}x{frame.shape[0]}")
-                inference_speed_display.metric("Inference Speed (ms)", f"{inference_speed:.2f}")
+                total_objects = sum(current_class_count.values())
+                fps_value = fps
+                resolution_width = frame.shape[1]
+                resolution_height = frame.shape[0]
+                inference_speed_value = inference_speed
+
+                # Update the four colored blocks dynamically
+                update_metric_blocks(
+                    total_objects, fps_value, resolution_width, resolution_height, inference_speed_value
+                )
 
                 for *xyxy, conf, cls in results.xyxy[0]:
                     if conf > confidence_threshold and model.names[int(cls)] in class_selection:

@@ -23,16 +23,33 @@ st.set_page_config(
     layout="wide",
 )
 
-st.title("Object Detection Dashboard")
-
-# Add custom CSS for background, colors, and padding between sections
 st.markdown("""
     <style>
-    .css-18e3th9 { padding-top: 1rem; padding-bottom: 1rem; }
-    .css-1d391kg { padding-top: 1rem; padding-bottom: 1rem; }
-    .stApp { background-color: #6b38b5; } /* Bright purple background */
+    .css-18e3th9 { padding-top: 0.5rem; padding-bottom: 0.5rem; }
+    .css-1d391kg { padding-top: 0.5rem; padding-bottom: 0.5rem; }
+    .stApp { background-color: #6b38b5; padding-left: 0px; padding-right: 0px;} /* Light background */
+
+    /* Style the title */
+    .title {
+        font-family: 'Roboto', sans-serif;
+        color: #FBE9D0;
+        font-size: 3rem;
+        font-weight: 700;
+        text-align: center;
+        margin-top: 20px;
+        margin-bottom: 20px;
+        background-color:#FBE9D0:
+    }
+
+    /* Make the content edge-to-edge */
+    .main {
+        padding-left: 0px;
+        padding-right: 0px;
+    }
+
+    /* Professional colors for blocks */
     .block { 
-        background-color: #f94144; 
+        background-color: #2E3B4E; 
         padding: 10px; 
         border-radius: 10px; 
         color: white; 
@@ -40,7 +57,7 @@ st.markdown("""
         margin-bottom: 10px;
     }
     .block-orange { 
-        background-color: #f3722c; 
+        background-color: #F39C12; 
         padding: 10px; 
         border-radius: 10px; 
         color: white; 
@@ -48,7 +65,7 @@ st.markdown("""
         margin-bottom: 10px;
     }
     .block-yellow { 
-        background-color: #f9c74f; 
+        background-color: #F1C40F; 
         padding: 10px; 
         border-radius: 10px; 
         color: black; 
@@ -56,20 +73,24 @@ st.markdown("""
         margin-bottom: 10px;
     }
     .block-green { 
-        background-color: #43aa8b; 
+        background-color: #27AE60; 
         padding: 10px; 
         border-radius: 10px; 
         color: white; 
         text-align: center; 
         margin-bottom: 10px;
     }
-    .section { 
-        margin-bottom: 20px;
+
+    /* Remove padding and margin at the bottom to prevent large gap */
+    .main .block-container {
+        padding-bottom: 0px !important;
+        margin-bottom: 0px !important;
     }
     </style>
     """, unsafe_allow_html=True)
 
-
+# Add title with new styling
+st.markdown('<h1 class="title">Object Detection Dashboard</h1>', unsafe_allow_html=True)
 # Sidebar for options
 st.sidebar.title("Settings")
 
@@ -84,7 +105,6 @@ class_selection = st.sidebar.multiselect(
 if not class_selection or len(class_selection) == 0:
     class_selection = list(model.names.values())  # Detect all classes by default
 
-
 # Option to select static image/video upload or live detection
 detection_mode = st.sidebar.radio(
     "Detection Mode",
@@ -94,7 +114,7 @@ detection_mode = st.sidebar.radio(
 # Add weather dropdown to the sidebar
 weather_conditions = st.sidebar.selectbox(
     "Select Weather Condition",
-    ("Normal", "Rainy", "Cloudy", "Foggy","Other")
+    ("Normal", "Rainy", "Cloudy", "Foggy", "Other")
 )
 
 # Confidence threshold slider
@@ -110,7 +130,7 @@ resolution_height = 0
 inference_speed_display = 0.0
 
 # Create placeholders for the metrics to update later
-col1, col2, col3, col4 = st.columns(4)
+col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
 
 with col1:
     total_objects_placeholder = st.empty()
@@ -154,6 +174,28 @@ def update_metric_blocks(total_objects, fps_value, resolution_width, resolution_
         </div>
     """, unsafe_allow_html=True)
 
+# Layout for three aligned plots at the bottom
+def update_bottom_plots(histogram, pie_chart, vehicle_pie_chart, traffic_graph, cumulative_graph):
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        histogram.plotly_chart(use_container_width=True)
+    with col2:
+        pie_chart.plotly_chart(use_container_width=True)
+    with col3:
+        vehicle_pie_chart.plotly_chart(use_container_width=True)
+
+    col4, col5 = st.columns(2)
+    with col4:
+        traffic_graph.plotly_chart(use_container_width=True)
+    with col5:
+        cumulative_graph.plotly_chart(use_container_width=True)
+
+
+# Add the rest of the logic here to process frames, display results, and align the boxes as needed
+# Ensure the final section uses the update_bottom_plots function to align your elements properly
+
+
 # Initialize class count dictionary and dataframe for timestamp logging
 class_count = {name: 0 for name in model.names.values()}
 timestamp_data = {"time": [], "class": [], "count": []}
@@ -162,40 +204,6 @@ timestamp_data = {"time": [], "class": [], "count": []}
 traffic_per_second = []
 cumulative_traffic = []
 start_time = datetime.now()
-
-# Function to add rain effect on the image
-# def add_rain(image):
-#     rain_overlay = image.copy()
-#     h, w, _ = image.shape
-#     rain_drops = np.zeros_like(image, dtype=np.uint8)
-#     for i in range(1000):  # Number of raindrops
-#         x = np.random.randint(0, w)
-#         y = np.random.randint(0, h)
-#         rain_drops = cv2.line(rain_drops, (x, y), (x, y + np.random.randint(5, 20)), (200, 200, 200), 1)
-    
-#     rain_overlay = cv2.addWeighted(rain_overlay, 0.8, rain_drops, 0.2, 0)
-#     return rain_overlay
-
-# # Function to add fog effect on the image
-# def add_fog(image):
-#     fog_overlay = image.copy()
-#     fog = np.zeros_like(image, dtype=np.uint8)
-#     fog = cv2.circle(fog, (fog.shape[1] // 2, fog.shape[0] // 2), fog.shape[1] // 3, (255, 255, 255), -1)
-#     fog = cv2.GaussianBlur(fog, (61, 61), 0)
-#     fog_overlay = cv2.addWeighted(fog_overlay, 0.8, fog, 0.2, 0)
-#     return fog_overlay
-
-# # Function to add cloudy effect on the image
-# def add_cloud(image):
-#     cloud_overlay = image.copy()
-#     clouds = np.zeros_like(image, dtype=np.uint8)
-#     for i in range(10):  # Number of clouds
-#         x, y = np.random.randint(0, cloud_overlay.shape[1]), np.random.randint(0, cloud_overlay.shape[0] // 2)
-#         radius = np.random.randint(50, 150)
-#         clouds = cv2.circle(clouds, (x, y), radius, (200, 200, 200), -1)
-#     clouds = cv2.GaussianBlur(clouds, (101, 101), 0)
-#     cloud_overlay = cv2.addWeighted(cloud_overlay, 0.7, clouds, 0.3, 0)
-#     return cloud_overlay
 
 # Update the traffic graph and remove initial date on the x-axis
 def update_traffic_graph(timestamp_data):
@@ -210,22 +218,22 @@ def update_traffic_graph(timestamp_data):
     df_second['time'] = df_second['time'].dt.strftime('%H:%M:%S')
 
     traffic_graph = px.line(df_second, x='time', y='count_per_second', title="Traffic Per Second", template="plotly_dark", height=250)
-    cumulative_graph = px.line(df_second, x='time', y='cumulative_count', title="Cumulative Traffic", template="plotly_dark", height=250)
+    cumulative_graph = px.line(df_second, x='time', y='cumulative_count', title="Cumulative Traffic", template="plotly_dark", height=325)
 
     return traffic_graph, cumulative_graph
 
 # Define the function to update the vehicle proportion pie chart
 def update_vehicle_proportion_chart(class_count):
-    vehicle_classes = ['car', 'truck', 'bus']  # You can adjust the vehicle classes
+    vehicle_classes = ['car', 'truck', 'bus','motorcyclew']  # You can adjust the vehicle classes
     vehicle_count = {cls: class_count[cls] for cls in vehicle_classes if cls in class_count and class_count[cls] > 0}
     
     if vehicle_count:
         vehicle_data = {"Vehicle Type": list(vehicle_count.keys()), "Count": list(vehicle_count.values())}
         df = pd.DataFrame(vehicle_data)
         fig = px.pie(df, names="Vehicle Type", values="Count", title="Vehicle Proportion",
-                     template="plotly_dark", color_discrete_sequence=px.colors.sequential.RdBu, height=250)
+                     template="plotly_dark", color_discrete_sequence=px.colors.sequential.RdBu, height=325)
     else:
-        fig = px.pie(title="No Vehicles Detected", template="plotly_dark", height=250)
+        fig = px.pie(title="No Vehicles Detected", template="plotly_dark", height=325)
         fig.update_traces(marker=dict(colors=['grey']))
         fig.update_layout(annotations=[{
             'text': 'No Vehicles Detected',
@@ -282,9 +290,9 @@ def calculate_area_proportions(results, frame_area):
         }
         df = pd.DataFrame(area_data)
         fig = px.pie(df, names="Classes", values="Area", title="Area Proportion",
-                     template="plotly_dark", color_discrete_sequence=px.colors.sequential.RdBu, height=250)
+                     template="plotly_dark", color_discrete_sequence=px.colors.sequential.RdBu, height=280)
     else:
-        fig = px.pie(title="No Objects Detected", template="plotly_dark", height=250)
+        fig = px.pie(title="No Objects Detected", template="plotly_dark", height=290)
         fig.update_traces(marker=dict(colors=['grey']))
         fig.update_layout(annotations=[{
             'text': 'No Objects Detected',
@@ -307,14 +315,6 @@ def calculate_fps(start_time, end_time):
 # Function to process frames and update the real-time charts
 def process_frame(frame):
     start_time = time.time()
-
-    # # Apply selected weather effect
-    # if weather_conditions == "Rainy":
-    #     frame = add_rain(frame)
-    # elif weather_conditions == "Cloudy":
-    #     frame = add_cloud(frame)
-    # elif weather_conditions == "Foggy":
-    #     frame = add_fog(frame)
 
     # Object detection on modified frame
     results = model(frame)
@@ -340,6 +340,16 @@ def process_frame(frame):
                 timestamp_data["count"].append(class_count[class_name])
 
     return results, class_count, frame_area, fps, inference_speed
+
+
+import random
+
+# Dictionary to store random colors for each class
+color_map = {}
+
+# Function to generate a random color
+def get_random_color():
+    return (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
 
 # YOLOv5 video processor class for WebRTC live streaming
 class YOLOv5VideoProcessor(VideoProcessorBase):
@@ -392,7 +402,7 @@ def main():
     with col2:
         st.markdown('<div class="section">', unsafe_allow_html=True)
         frame_placeholder = st.empty()  # Video frame placeholder
-        pie_chart_placeholder=st.empty()
+        pie_chart_placeholder = st.empty()
         st.markdown('</div>', unsafe_allow_html=True)
 
     with col3:
@@ -413,7 +423,7 @@ def main():
             async_processing=True,
         )
 
-        # Loop for continuously updating metrics while webcam is running
+    # Loop for continuously updating metrics while webcam is running
         while ctx.state.playing:
             if ctx.video_processor:
                 processor = ctx.video_processor
@@ -423,8 +433,8 @@ def main():
                             # Calculate the metrics
                             total_objects = sum(processor.current_class_count.values())
                             fps_value = processor.fps
-                            resolution_width = 640
-                            resolution_height = 480
+                            processed_frame = processor.results.render()[0]  # Get the processed frame
+                            resolution_height, resolution_width = processed_frame.shape[:2]  # Extract height and width
                             inference_speed_value = processor.inference_speed
 
                             # Update the four colored blocks dynamically
@@ -433,10 +443,8 @@ def main():
                             )
 
                             rgb_frame = cv2.cvtColor(processor.results.render()[0], cv2.COLOR_BGR2RGB)
-                            frame_placeholder.image(rgb_frame, caption="Video Frame", use_column_width=True)
+                            frame_placeholder.image(rgb_frame, use_column_width=True)
 
-                            # Update the video frame below the metrics and above the graphs
-                            # frame_placeholder.image(processor.results.render()[0], caption="Video Frame", use_column_width=True)
 
                             # Update charts below the video frame
                             histogram = update_histogram(processor.current_class_count)
@@ -474,17 +482,28 @@ def main():
             )
 
             for *xyxy, conf, cls in results.xyxy[0]:
-                    if conf > confidence_threshold and model.names[int(cls)] in class_selection:
-                        label = f'{model.names[int(cls)]} {conf:.2f}'
-                        cv2.rectangle(frame, (int(xyxy[0]), int(xyxy[1])), (int(xyxy[2]), int(xyxy[3])), (0, 255, 0), 2)
-                        cv2.putText(frame, label, (int(xyxy[0]), int(xyxy[1]) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+                if conf > confidence_threshold and model.names[int(cls)] in class_selection:
+                    class_name = model.names[int(cls)]
+                    label = f'{class_name} {conf:.2f}'
+                    
+                    # If this class doesn't have an assigned color yet, generate one
+                    if class_name not in color_map:
+                        color_map[class_name] = get_random_color()
 
+                    # Get the color for the current class
+                    color = color_map[class_name]
+                    
+                    # Draw bounding box with the selected color
+                    cv2.rectangle(frame, (int(xyxy[0]), int(xyxy[1])), (int(xyxy[2]), int(xyxy[3])), color, 2)
+                    
+                    # Put text label with the same color
+                    cv2.putText(frame, label, (int(xyxy[0]), int(xyxy[1]) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+
+            # Update the video frame below the metrics and above the graphs
             # Convert BGR to RGB before displaying the image
             # rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)  # Ensure correct color conversion
             image_with_detections = Image.fromarray(frame)  # Convert back to PIL Image for display
-            frame_placeholder.image(image_with_detections, caption="Uploaded Image", use_column_width=True)
-
-            
+            frame_placeholder.image(image_with_detections,use_column_width=True)
 
             histogram = update_histogram(current_class_count)
             pie_chart = calculate_area_proportions(results, frame_area)
@@ -509,9 +528,6 @@ def main():
             
             cap = cv2.VideoCapture(tfile.name)
 
-            # Create a placeholder for the video frames
-            # frame_placeholder = st.empty()
-
             while cap.isOpened():
                 ret, frame = cap.read()
                 if not ret:
@@ -533,13 +549,24 @@ def main():
 
                 for *xyxy, conf, cls in results.xyxy[0]:
                     if conf > confidence_threshold and model.names[int(cls)] in class_selection:
-                        label = f'{model.names[int(cls)]} {conf:.2f}'
-                        cv2.rectangle(frame, (int(xyxy[0]), int(xyxy[1])), (int(xyxy[2]), int(xyxy[3])), (0, 255, 0), 2)
-                        cv2.putText(frame, label, (int(xyxy[0]), int(xyxy[1]) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+                        class_name = model.names[int(cls)]
+                        label = f'{class_name} {conf:.2f}'
+                        
+                        # If this class doesn't have an assigned color yet, generate one
+                        if class_name not in color_map:
+                            color_map[class_name] = get_random_color()
 
+                        # Get the color for the current class
+                        color = color_map[class_name]
+                        
+                        # Draw bounding box with the selected color
+                        cv2.rectangle(frame, (int(xyxy[0]), int(xyxy[1])), (int(xyxy[2]), int(xyxy[3])), color, 2)
+                        
+                        # Put text label with the same color
+                        cv2.putText(frame, label, (int(xyxy[0]), int(xyxy[1]) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
                 # Convert the frame from BGR to RGB after processing before rendering
                 rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                frame_placeholder.image(rgb_frame, caption="Video Frame", use_column_width=True)
+                frame_placeholder.image(rgb_frame, use_column_width=True)
 
 
                 histogram = update_histogram(current_class_count)

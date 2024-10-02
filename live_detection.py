@@ -1,63 +1,26 @@
-import time
-import threading
-import av
 import streamlit as st
-from streamlit_webrtc import webrtc_streamer, VideoProcessorBase, WebRtcMode
-from common import (
-    model,
-    update_histogram,
-    calculate_area_proportions,
-    update_vehicle_proportion_chart,
-    update_traffic_graph,
-    update_timestamp_line_graph,
-    process_frame,
-    confidence_threshold,
-    class_selection,
-    timestamp_data,
-    total_objects,
-    fps_display,
-    resolution_display,
-    inference_speed_display,
-)
+from streamlit_webrtc import webrtc_streamer, WebRtcMode
+import config
+from app_utils import YOLOv5VideoProcessor, update_histogram, calculate_area_proportions, update_vehicle_proportion_chart, update_traffic_graph
+from datetime import datetime, timedelta
+import time
+import cv2
 
-# YOLOv5 video processor class for WebRTC live streaming
-class YOLOv5VideoProcessor(VideoProcessorBase):
-    def __init__(self):
-        self.confidence_threshold = confidence_threshold  # Confidence threshold slider value from the sidebar
-        self.class_selection = class_selection  # Class selection from the sidebar
-        self.lock = threading.Lock()  # Ensure thread-safe access by adding a lock
-        self.results = None
-        self.current_class_count = {}
-        self.frame_area = 0
-        self.fps = 0
-        self.inference_speed = 0
+# Global variable to store traffic data (last 10 seconds)
+traffic_data = []
 
-    def recv(self, frame):
-        img = frame.to_ndarray(format="bgr24")  # Get the video frame as a NumPy array
-
-        # Process frame and collect metrics
-        results, current_class_count, frame_area, fps, inference_speed = process_frame(img)
-
-        # Update class state safely with a lock
-        with self.lock:
-            self.results = results
-            self.current_class_count = current_class_count
-            self.frame_area = frame_area
-            self.fps = fps
-            self.inference_speed = inference_speed
-
-        return av.VideoFrame.from_ndarray(img, format="bgr24")
-
-
-def run_live_detection():
-    frame_placeholder = st.empty()
-    histogram_placeholder = st.empty()
-    pie_chart_placeholder = st.empty()
-    vehicle_pie_chart_placeholder = st.empty()
-    traffic_graph_placeholder = st.empty()
-    cumulative_graph_placeholder = st.empty()
-    timestamp_histogram_placeholder = st.empty()
-
+def run_live_detection(
+    confidence_threshold,  # Add confidence threshold parameter
+    class_selection,  # Add class selection parameter
+    frame_placeholder, 
+    pie_chart_placeholder_1, 
+    pie_chart_placeholder_2, 
+    traffic_graph_placeholder, 
+    cumulative_graph_placeholder,
+    class_distribution_placeholder,
+    update_metric_blocks  # Function to update metric blocks dynamically
+):
+    # Create a WebRTC streamer instance for live detection
     ctx = webrtc_streamer(
         key="object-detection",
         mode=WebRtcMode.SENDRECV,
@@ -67,39 +30,68 @@ def run_live_detection():
         async_processing=True,
     )
 
-    # Loop for continuously updating metrics while webcam is running
+    # Loop for continuously updating metrics while the webcam is running
     while ctx.state.playing:
         if ctx.video_processor:
             processor = ctx.video_processor
-            if hasattr(processor, "lock"):
+            # print(processor)
+            # Dynamically update the confidence threshold and class selection
+            processor.update_params(confidence_threshold, class_selection)
+
+            if hasattr(processor, 'lock'):
                 with processor.lock:
                     if processor.results:
-                        # Update metrics and charts
-                        total = sum(processor.current_class_count.values())
-                        total_objects.metric("Total Objects", total)
-                        fps_display.metric("FPS", f"{processor.fps:.2f}")
-                        resolution_display.metric("Resolution", f"{640}x{480}")
-                        inference_speed_display.metric(
-                            "Inference Speed (ms)", f"{processor.inference_speed:.2f}"
+                        print(processor.results)
+                        # Debugging: Display class counts
+                        st.write("Class counts: ", processor.current_class_count)
+
+                        # Get the processed frame and metrics
+                        total_objects = sum(processor.current_class_count.values())
+                        print(total_objects)
+                        fps_value = processor.fps
+                        processed_frame = processor.results.render()[0]  # Get the processed frame
+                        resolution_height, resolution_width = processed_frame.shape[:2]
+                        inference_speed_value = processor.inference_speed
+
+                        # Update the metric blocks
+                        update_metric_blocks(
+                            total_objects, fps_value, resolution_width, resolution_height, inference_speed_value
                         )
 
+                        # Convert the processed frame to RGB and display it
+                        rgb_frame = cv2.cvtColor(processor.results.render()[0], cv2.COLOR_BGR2RGB)
+                        frame_placeholder.image(rgb_frame, use_column_width=True)
+
+                        # Update charts below the video frame
                         histogram = update_histogram(processor.current_class_count)
-                        pie_chart = calculate_area_proportions(
-                            processor.results, processor.frame_area
-                        )
-                        vehicle_pie_chart = update_vehicle_proportion_chart(
-                            processor.current_class_count
-                        )
+                        pie_chart_1 = calculate_area_proportions(processor.results, processor.frame_area, class_selection)
+                        pie_chart_2 = update_vehicle_proportion_chart(processor.current_class_count)
 
-                        histogram_placeholder.plotly_chart(histogram, use_container_width=True)
-                        pie_chart_placeholder.plotly_chart(pie_chart, use_container_width=True)
-                        vehicle_pie_chart_placeholder.plotly_chart(vehicle_pie_chart, use_container_width=True)
+                        pie_chart_placeholder_1.plotly_chart(pie_chart_1, use_container_width=True)
+                        pie_chart_placeholder_2.plotly_chart(pie_chart_2, use_container_width=True)
 
-                        traffic_graph, cumulative_graph = update_traffic_graph(timestamp_data)
+                        # Update traffic data for the sliding window of the last 10 seconds
+                        global traffic_data
+                        current_time = datetime.now().strftime('%H:%M:%S')
+
+                        # Append the new timestamp data
+                        for class_name, count in processor.current_class_count.items():
+                            traffic_data.append({
+                                "time": current_time,
+                                "class": class_name,
+                                "count": count
+                            })
+
+                        # Keep only the last 10 seconds of data
+                        traffic_data = [data for data in traffic_data if data["time"] >= (datetime.now() - timedelta(seconds=10)).strftime('%H:%M:%S')]
+                        # print(traffic_data)
+
+                        # Pass the updated traffic data to update the traffic and cumulative graphs
+                        traffic_graph, cumulative_graph = update_traffic_graph(traffic_data)
                         traffic_graph_placeholder.plotly_chart(traffic_graph, use_container_width=True)
                         cumulative_graph_placeholder.plotly_chart(cumulative_graph, use_container_width=True)
 
-                        line_graph = update_timestamp_line_graph(timestamp_data)
-                        timestamp_histogram_placeholder.plotly_chart(line_graph, use_container_width=True)
+                        # Update class distribution histogram
+                        class_distribution_placeholder.plotly_chart(histogram, use_container_width=True)
 
-        time.sleep(0.1)
+        time.sleep(0.1)  # Small sleep to prevent resource overconsumption

@@ -244,30 +244,19 @@ def calculate_area_proportions(results, frame_area, class_selection):
 
 def update_traffic_graph(timestamp_data):
     df = pd.DataFrame(timestamp_data)
-
-    # Convert 'time' to datetime for grouping
+    
     df['time'] = pd.to_datetime(df['time'], format='%H:%M:%S')
-
-    # Group by second and sum counts (handles missing data with zero counts)
-    df_second = df.groupby(df['time'].dt.floor('S')).sum().reset_index()
-
-    # Ensure all time intervals have data, even with zero counts
-    time_range = pd.date_range(df['time'].min(), df['time'].max(), freq='S')
+    
     df_second = df.groupby(df['time'].dt.floor('S')).size().reset_index(name='count_per_second')
-    df_second.columns = ['time', 'count_per_second']
-
-    # Calculate cumulative count
     df_second['cumulative_count'] = df_second['count_per_second'].cumsum()
 
     # Formatting to only show time without the date
     df_second['time'] = df_second['time'].dt.strftime('%H:%M:%S')
 
-    # Generate the traffic graph and cumulative graph
     traffic_graph = px.line(df_second, x='time', y='count_per_second', title="Traffic Per Second", template="plotly_dark", height=250)
     cumulative_graph = px.line(df_second, x='time', y='cumulative_count', title="Cumulative Traffic", template="plotly_dark", height=325)
 
     return traffic_graph, cumulative_graph
-
 # Function to generate a random color for each class
 def get_random_color():
     return (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))

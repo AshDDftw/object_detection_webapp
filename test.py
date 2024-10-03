@@ -190,7 +190,8 @@ if detection_mode == "Live Detection":
         traffic_graph_placeholder, 
         cumulative_graph_placeholder,
         class_distribution_placeholder,
-        update_metric_blocks
+        update_metric_blocks,
+        weather_conditions
     )
 
 elif detection_mode == "Upload Image":
@@ -203,7 +204,8 @@ elif detection_mode == "Upload Image":
         traffic_graph_placeholder, 
         cumulative_graph_placeholder,
         class_distribution_placeholder,
-        update_metric_blocks
+        update_metric_blocks,
+        weather_conditions
     )
 
 elif detection_mode == "Upload Video":
@@ -216,5 +218,6 @@ elif detection_mode == "Upload Video":
         traffic_graph_placeholder, 
         cumulative_graph_placeholder,
         class_distribution_placeholder,
-        update_metric_blocks
+        update_metric_blocks,
+        weather_conditions
     )

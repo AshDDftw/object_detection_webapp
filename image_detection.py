@@ -2,7 +2,7 @@ import streamlit as st
 from PIL import Image
 import numpy as np
 import config
-from app_utils import process_frame, update_histogram, calculate_area_proportions, update_vehicle_proportion_chart, update_traffic_graph, get_random_color
+from app_utils import process_frame, update_histogram, calculate_area_proportions, update_vehicle_proportion_chart, update_traffic_graph, get_random_color,apply_weather_effect
 import cv2
 from datetime import datetime , timedelta
 
@@ -19,7 +19,8 @@ def run_image_detection(
     traffic_graph_placeholder, 
     cumulative_graph_placeholder,
     class_distribution_placeholder,
-    update_metric_blocks   # Function to update metric blocks dynamically
+    update_metric_blocks,   # Function to update metric blocks dynamically
+    weather_conditions
 ):
     uploaded_image = st.sidebar.file_uploader("Upload an Image", type=["jpg", "jpeg", "png"])
     
@@ -27,12 +28,17 @@ def run_image_detection(
         image = Image.open(uploaded_image)
         frame = np.array(image)
 
-        # Process frame using the model from config
-        results, current_class_count, frame_area, fps, inference_speed, timestamp_data = process_frame(frame, config.model, confidence_threshold, class_selection)
+        # Apply cloudy weather effect to the frame
+        weather_frame = apply_weather_effect(frame,weather_conditions)
+
+        # Process the cloudy frame using the model from config
+        results, current_class_count, frame_area, fps, inference_speed, timestamp_data = process_frame(
+            weather_frame, config.model, confidence_threshold, class_selection
+        )
 
         total_objects = sum(current_class_count.values())
-        resolution_width = frame.shape[1]
-        resolution_height = frame.shape[0]
+        resolution_width = weather_frame.shape[1]
+        resolution_height = weather_frame.shape[0]
 
         # Update the metric blocks dynamically
         update_metric_blocks(total_objects, fps, resolution_width, resolution_height, inference_speed)
@@ -53,13 +59,13 @@ def run_image_detection(
                 color = color_map[class_name]
 
                 # Draw bounding box with the selected color
-                cv2.rectangle(frame, (int(xyxy[0]), int(xyxy[1])), (int(xyxy[2]), int(xyxy[3])), color, 2)
+                cv2.rectangle(weather_frame, (int(xyxy[0]), int(xyxy[1])), (int(xyxy[2]), int(xyxy[3])), color, 2)
                 
                 # Put text label with the same color
-                cv2.putText(frame, label, (int(xyxy[0]), int(xyxy[1]) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+                cv2.putText(weather_frame, label, (int(xyxy[0]), int(xyxy[1]) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
 
         # Convert BGR to RGB and display the image
-        image_with_detections = Image.fromarray(frame)
+        image_with_detections = Image.fromarray(weather_frame)
         frame_placeholder.image(image_with_detections, use_column_width=True)
 
         # Update the traffic_data list with new timestamps and class counts

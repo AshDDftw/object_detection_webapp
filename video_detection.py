@@ -2,7 +2,7 @@ import streamlit as st
 import tempfile
 import cv2
 import config
-from app_utils import process_frame, update_histogram, calculate_area_proportions, update_vehicle_proportion_chart, update_traffic_graph, get_random_color
+from app_utils import process_frame, update_histogram, calculate_area_proportions, update_vehicle_proportion_chart, update_traffic_graph, get_random_color,apply_weather_effect
 import time
 from datetime import datetime , timedelta
 
@@ -18,7 +18,8 @@ def run_video_detection(
     traffic_graph_placeholder, 
     cumulative_graph_placeholder,
     class_distribution_placeholder,
-    update_metric_blocks  # Function to update metric blocks dynamically
+    update_metric_blocks,  # Function to update metric blocks dynamically
+    weather_conditions
 ):
     uploaded_video = st.sidebar.file_uploader("Upload a Video", type=["mp4", "avi", "mov"])
 
@@ -34,14 +35,17 @@ def run_video_detection(
                 st.success("Video processing completed.")
                 break
 
-            # Process frame using the model from config
+            # Apply cloudy weather effect to the frame
+            weather_frame = apply_weather_effect(frame,weather_conditions)
+
+            # Process the cloudy frame using the model from config
             results, current_class_count, frame_area, fps, inference_speed, timestamp_data = process_frame(
-                frame, config.model, confidence_threshold, class_selection
+                weather_frame, config.model, confidence_threshold, class_selection
             )
 
             total_objects = sum(current_class_count.values())
-            resolution_width = frame.shape[1]
-            resolution_height = frame.shape[0]
+            resolution_width = weather_frame.shape[1]
+            resolution_height = weather_frame.shape[0]
 
             # Update the metric blocks dynamically
             update_metric_blocks(total_objects, fps, resolution_width, resolution_height, inference_speed)
@@ -62,13 +66,13 @@ def run_video_detection(
                     color = color_map[class_name]
 
                     # Draw bounding box with the selected color
-                    cv2.rectangle(frame, (int(xyxy[0]), int(xyxy[1])), (int(xyxy[2]), int(xyxy[3])), color, 2)
+                    cv2.rectangle(weather_frame, (int(xyxy[0]), int(xyxy[1])), (int(xyxy[2]), int(xyxy[3])), color, 2)
 
                     # Put text label with the same color
-                    cv2.putText(frame, label, (int(xyxy[0]), int(xyxy[1]) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+                    cv2.putText(weather_frame, label, (int(xyxy[0]), int(xyxy[1]) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
 
             # Convert the frame from BGR to RGB and display it
-            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            rgb_frame = cv2.cvtColor(weather_frame, cv2.COLOR_BGR2RGB)
             frame_placeholder.image(rgb_frame, use_column_width=True)
 
             # Update the traffic_data list with new timestamps and class counts

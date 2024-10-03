@@ -1,7 +1,7 @@
 import streamlit as st
 from streamlit_webrtc import webrtc_streamer, WebRtcMode
 import config
-from app_utils import YOLOv5VideoProcessor, update_histogram, calculate_area_proportions, update_vehicle_proportion_chart, update_traffic_graph
+from app_utils import YOLOv5VideoProcessor, update_histogram, calculate_area_proportions, update_vehicle_proportion_chart, update_traffic_graph, apply_weather_effect
 from datetime import datetime, timedelta
 import time
 import cv2
@@ -18,7 +18,8 @@ def run_live_detection(
     traffic_graph_placeholder, 
     cumulative_graph_placeholder,
     class_distribution_placeholder,
-    update_metric_blocks  # Function to update metric blocks dynamically
+    update_metric_blocks,  # Function to update metric blocks dynamically
+    weather_conditions
 ):
     # Create a WebRTC streamer instance for live detection
     ctx = webrtc_streamer(
@@ -36,7 +37,7 @@ def run_live_detection(
             processor = ctx.video_processor
             # print(processor)
             # Dynamically update the confidence threshold and class selection
-            processor.update_params(confidence_threshold, class_selection)
+            processor.update_params(confidence_threshold, class_selection, weather_conditions)
 
             if hasattr(processor, 'lock'):
                 with processor.lock:

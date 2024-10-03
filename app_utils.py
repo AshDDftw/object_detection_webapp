@@ -10,6 +10,8 @@ import threading
 import av
 import streamlit as st
 import config
+import imgaug.augmenters as iaa
+import numpy as np
 
 
 
@@ -73,10 +75,11 @@ class YOLOv5VideoProcessor(VideoProcessorBase):
         self.frame_area = 0
         self.model = config.model  # Load YOLOv5 model
 
-    def update_params(self, confidence_threshold, class_selection):
+    def update_params(self, confidence_threshold, class_selection,weather_conditions='Normal'):
         with self.lock:
             self.confidence_threshold = confidence_threshold
             self.class_selection = class_selection
+            self.weather_conditions = weather_conditions
 
     def recv(self, frame):
         img = frame.to_ndarray(format="bgr24")  # Get the video frame as a NumPy array
@@ -86,8 +89,12 @@ class YOLOv5VideoProcessor(VideoProcessorBase):
 
         # Process frame and collect metrics
         try:
-            results, current_class_count, frame_area, fps, inference_speed, _ = process_frame(
-                img, self.model, self.confidence_threshold, self.class_selection
+            # Apply cloudy weather effect to the frame
+            cloudy_frame = apply_weather_effect(img,self.weather_conditions)
+
+            # Process the cloudy frame using the model from config
+            results, current_class_count, frame_area, fps, inference_speed, timestamp_data = process_frame(
+                cloudy_frame, config.model, self.confidence_threshold, self.class_selection
             )
         except Exception as e:
             print("Error in frame processing:", str(e))
@@ -277,3 +284,33 @@ def update_bottom_plots(histogram, pie_chart, vehicle_pie_chart, traffic_graph, 
         traffic_graph.plotly_chart(use_container_width=True)
     with col5:
         cumulative_graph.plotly_chart(use_container_width=True)
+
+
+
+def apply_weather_effect(frame, weather_type="normal"):
+
+    if weather_type == "Normal":
+        # No augmentation, return the original frame
+        return frame
+
+    elif weather_type == "Rainy":
+        # Apply a rainy effect
+        rain_augmenter = iaa.Rain(drop_size=(0.10, 0.20), speed=(0.10, 0.30))
+        rainy_frame = rain_augmenter(image=frame)
+        return rainy_frame
+
+    elif weather_type == "Cloudy":
+        # Apply a cloudy effect
+        cloud_augmenter = iaa.Clouds()
+        cloudy_frame = cloud_augmenter(image=frame)
+        return cloudy_frame
+
+    elif weather_type == "Foggy":
+        # Apply a foggy effect
+        fog_augmenter = iaa.Fog()
+        foggy_frame = fog_augmenter(image=frame)
+        return foggy_frame
+
+    else:
+        # If the weather type is not recognized, return the original frame
+        return frame

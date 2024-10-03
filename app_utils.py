@@ -253,7 +253,7 @@ def update_traffic_graph(timestamp_data):
 
     # Ensure all time intervals have data, even with zero counts
     time_range = pd.date_range(df['time'].min(), df['time'].max(), freq='S')
-    df_second = df_second.set_index('time').reindex(time_range, fill_value=0).reset_index()
+    df_second = df.groupby(df['time'].dt.floor('S')).size().reset_index(name='count_per_second')
     df_second.columns = ['time', 'count_per_second']
 
     # Calculate cumulative count

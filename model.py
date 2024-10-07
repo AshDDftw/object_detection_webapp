@@ -1,8 +1,6 @@
-import torch
+from ultralytics import YOLO
 
-# Download the YOLOv5 model
-model = torch.hub.load('ultralytics/yolov5', 'yolov5s', pretrained=True)
+# Download the YOLOv8 model (YOLOv8s in this case)
+model = YOLO('yolov8m-obb.pt') 
 
-# Save the model locally
-model.save("yolov5s.pt")
-
+model.export() 

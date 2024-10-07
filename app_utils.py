@@ -24,10 +24,9 @@ color_map = {}
 def process_frame(frame, model, confidence_threshold, class_selection):
     start_time = time.time()
 
-    # print('hereeee')
-
-    # Object detection on the frame
+    # Object detection on the frame using YOLOv8 model
     results = model(frame)
+
     end_time = time.time()
 
     # Calculate metrics
@@ -35,35 +34,99 @@ def process_frame(frame, model, confidence_threshold, class_selection):
     fps = calculate_fps(start_time, end_time)
     frame_area = frame.shape[0] * frame.shape[1]
 
-    class_count = {name: 0 for name in model.names.values()}
+    # Initialize class count and timestamp data
+    class_count = {name: 0 for name in model.names}
     timestamp_data = {"time": [], "class": [], "count": []}
 
-    # Update class counts and timestamp log
     current_time = datetime.now().strftime('%H:%M:%S')
-    objects_detected = False  # Track if any objects are detected in this frame
+    objects_detected = False  # Flag to check if any objects are detected
 
-    for *xyxy, conf, cls in results.xyxy[0]:
-        if conf > confidence_threshold:
-            class_name = model.names[int(cls)]
-            if class_name in class_selection:
-                class_count[class_name] += 1
-                timestamp_data["time"].append(current_time)
-                timestamp_data["class"].append(class_name)
-                timestamp_data["count"].append(class_count[class_name])
-                objects_detected = True
+    # Check if any results were returned
+    if not results or results[0].boxes is None or len(results[0].boxes) == 0:
+        # If no objects are detected, return 0 count
+        timestamp_data["time"].append(current_time)
+        timestamp_data["class"].append("None")
+        timestamp_data["count"].append(0)
+        return None, class_count, frame_area, fps, inference_speed, timestamp_data
 
-    # If no objects are detected, log zero count for this time
+    for result in results:
+        boxes = result.boxes
+        for box in boxes:
+            cls = int(box.cls[0])  # Class index
+            conf = float(box.conf[0])  # Confidence score
+            if conf > confidence_threshold:
+                class_name = model.names[cls]
+                if class_name in class_selection:
+                    class_count[class_name] += 1
+                    timestamp_data["time"].append(current_time)
+                    timestamp_data["class"].append(class_name)
+                    timestamp_data["count"].append(class_count[class_name])
+                    objects_detected = True
+
+    # If no objects are detected, return a zero count for traffic graph purposes
     if not objects_detected:
         timestamp_data["time"].append(current_time)
-        timestamp_data["class"].append("None")  # Optional, you can add a placeholder class
+        timestamp_data["class"].append("None")
         timestamp_data["count"].append(0)
-
-    # print(timestamp_data)
 
     return results, class_count, frame_area, fps, inference_speed, timestamp_data
 
 
-class YOLOv5VideoProcessor(VideoProcessorBase):
+# class YOLOv8VideoProcessor:
+#     def __init__(self):
+#         self.confidence_threshold = 0.5
+#         self.class_selection = []
+#         self.results = None
+#         self.current_class_count = {}
+#         self.fps = 0
+#         self.inference_speed = 0
+#         self.frame_area = 0
+
+#     def update_params(self, confidence_threshold, class_selection, weather_conditions):
+#         self.confidence_threshold = confidence_threshold
+#         self.class_selection = class_selection
+#         self.weather_conditions = weather_conditions
+
+#     def recv(self, frame):
+#         img = frame.to_ndarray(format="bgr24")
+
+#         # Apply any weather effect (if specified)
+#         img = apply_weather_effect(img, self.weather_conditions)
+
+#         # Perform object detection on the frame using the YOLOv8 model
+#         results = config.model(img)
+
+#         # Extract and update the results, class counts, fps, and inference speed
+#         self.results = results
+#         self.current_class_count = self.get_class_count(results)
+#         self.frame_area = img.shape[0] * img.shape[1]
+
+#         # Render and return the processed frame for display
+#         return av.VideoFrame.from_ndarray(results.render()[0], format="bgr24")
+
+#     def get_class_count(self, results):
+#         # Initialize a dictionary for class counts
+#         class_count = {name: 0 for name in config.model.names}
+
+#         # Count objects detected in the frame
+#         for result in results:
+#             for box in result.boxes:
+#                 cls = int(box.cls[0])  # Class index
+#                 conf = float(box.conf[0])  # Confidence score
+#                 if conf > self.confidence_threshold:
+#                     class_name = config.model.names[cls]
+#                     if class_name in self.class_selection:
+#                         class_count[class_name] += 1
+
+#         return class_count
+
+import cv2
+import av
+import threading
+import config
+from streamlit_webrtc import VideoProcessorBase
+
+class YOLOv8VideoProcessor(VideoProcessorBase):
     def __init__(self):
         self.confidence_threshold = 0.5  # Set a default confidence threshold
         self.class_selection = []  # Selected classes
@@ -73,9 +136,9 @@ class YOLOv5VideoProcessor(VideoProcessorBase):
         self.fps = 0
         self.inference_speed = 0
         self.frame_area = 0
-        self.model = config.model  # Load YOLOv5 model
+        self.model = config.model  # Load YOLOv8 model
 
-    def update_params(self, confidence_threshold, class_selection,weather_conditions='Normal'):
+    def update_params(self, confidence_threshold, class_selection, weather_conditions='Normal'):
         with self.lock:
             self.confidence_threshold = confidence_threshold
             self.class_selection = class_selection
@@ -89,16 +152,23 @@ class YOLOv5VideoProcessor(VideoProcessorBase):
 
         # Process frame and collect metrics
         try:
-            # Apply cloudy weather effect to the frame
-            cloudy_frame = apply_weather_effect(img,self.weather_conditions)
+            # Apply weather effect (e.g., cloudy) to the frame
+            processed_frame = apply_weather_effect(img, self.weather_conditions)
 
-            # Process the cloudy frame using the model from config
-            results, current_class_count, frame_area, fps, inference_speed, timestamp_data = process_frame(
-                cloudy_frame, config.model, self.confidence_threshold, self.class_selection
-            )
+            # Run YOLOv8 model on the processed frame
+            results = self.model(processed_frame)
+
+            # Measure inference speed and frame area
+            frame_area = processed_frame.shape[0] * processed_frame.shape[1]
+
+            # Extract and count detections
+            current_class_count = self.get_class_count(results)
+            fps = 1 / results.t if results.t > 0 else 0
+            inference_speed = results.t * 1000  # Convert inference time to ms
+
         except Exception as e:
             print("Error in frame processing:", str(e))
-            return av.VideoFrame.from_ndarray(img, format="bgr24")
+            return av.VideoFrame.from_ndarray(processed_frame, format="bgr24")
 
         # Update class state safely with a lock
         with self.lock:
@@ -109,19 +179,45 @@ class YOLOv5VideoProcessor(VideoProcessorBase):
             self.inference_speed = inference_speed
 
         # Draw bounding boxes and labels on the frame
-        for *xyxy, conf, cls in results.xyxy[0]:
-            if conf > self.confidence_threshold:  # Apply the confidence threshold
-                class_name = self.model.names[int(cls)]
-                if class_name in self.class_selection:
-                    label = f'{class_name} {conf:.2f}'
-                    cv2.rectangle(img, (int(xyxy[0]), int(xyxy[1])), (int(xyxy[2]), int(xyxy[3])), (0, 255, 0), 2)
-                    cv2.putText(img, label, (int(xyxy[0]), int(xyxy[1]) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+        for result in results:
+            boxes = result.boxes
+            for box in boxes:
+                cls = int(box.cls[0])  # Class index
+                conf = float(box.conf[0])  # Confidence score
+                if conf > self.confidence_threshold:
+                    class_name = self.model.names[cls]
+                    if class_name in self.class_selection:
+                        label = f'{class_name} {conf:.2f}'
+
+                        # Get the bounding box coordinates
+                        x1, y1, x2, y2 = map(int, box.xyxy[0])
+
+                        # Draw bounding box and label
+                        cv2.rectangle(processed_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                        cv2.putText(processed_frame, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
 
         # Debugging: Ensure the image is properly processed
         print("Processed frame ready for rendering")
 
         # Return the processed frame
-        return av.VideoFrame.from_ndarray(img, format="bgr24")
+        return av.VideoFrame.from_ndarray(processed_frame, format="bgr24")
+
+    def get_class_count(self, results):
+        # Initialize a dictionary for class counts
+        class_count = {name: 0 for name in self.model.names}
+
+        # Count objects detected in the frame
+        for result in results:
+            boxes = result.boxes
+            for box in boxes:
+                cls = int(box.cls[0])
+                conf = float(box.conf[0])
+                if conf > self.confidence_threshold:
+                    class_name = self.model.names[cls]
+                    if class_name in self.class_selection:
+                        class_count[class_name] += 1
+
+        return class_count
 
 
 # Function to update the metric blocks
@@ -209,23 +305,31 @@ def update_vehicle_proportion_chart(class_count):
 
 # Function to calculate area proportions and plot a pie chart
 def calculate_area_proportions(results, frame_area, class_selection):
-    # Initialize area_dict for only the selected classes
     area_dict = {name: 0 for name in class_selection}
 
-    for *xyxy, conf, cls in results.xyxy[0]:
-        if conf > 0.5:  # Use confidence threshold
-            class_name = config.model.names[int(cls)]
-            if class_name in class_selection:  # Only calculate area for selected classes
-                # Calculate bounding box area
-                width = xyxy[2] - xyxy[0]
-                height = xyxy[3] - xyxy[1]
-                area = width * height
-                area_dict[class_name] += area
+    for result in results:
+        boxes = result.boxes  # Boxes object
+        if boxes is None or len(boxes) == 0:  # Check if boxes are None or empty
+            print(" ")
+            continue  # Skip to the next frame if no boxes are detected
 
-    # Filter out classes with 0 area
+        for result in results:
+            boxes = result.boxes
+            for box in boxes:
+                conf = float(box.conf[0])
+                cls = int(box.cls[0])
+                if conf > 0.5:  # Use confidence threshold
+                    class_name = config.model.names[cls]
+                    if class_name in class_selection:
+                        # Extract xyxy coordinates
+                        x1, y1, x2, y2 = map(int, box.xyxy[0])
+                        width = x2 - x1
+                        height = y2 - y1
+                        area = width * height
+                        area_dict[class_name] += area
+
     filtered_area_dict = {k: v for k, v in area_dict.items() if v > 0}
 
-    # If any areas were calculated, create the pie chart
     if filtered_area_dict:
         area_data = {
             "Classes": list(filtered_area_dict.keys()),
@@ -235,7 +339,6 @@ def calculate_area_proportions(results, frame_area, class_selection):
         fig = px.pie(df, names="Classes", values="Area", title="Area Proportion",
                      template="plotly_dark", color_discrete_sequence=px.colors.sequential.RdBu, height=280)
     else:
-        # If no objects were detected for the selected classes, show an empty pie chart
         fig = px.pie(title="No Objects Detected", template="plotly_dark", height=290)
         fig.update_traces(marker=dict(colors=['grey']))
         fig.update_layout(annotations=[{
@@ -250,8 +353,18 @@ def calculate_area_proportions(results, frame_area, class_selection):
 
 
 def update_traffic_graph(timestamp_data):
+    # Check if the 'time' key exists in the dictionary
+    if not timestamp_data or 'time' not in timestamp_data:
+        print(" ")
+        return None, None  # Return empty graphs if there's no valid data
+    
     df = pd.DataFrame(timestamp_data)
     
+    if 'time' not in df.columns:
+        print(" ")
+        return None, None  # Return empty graphs if 'time' column doesn't exist
+
+    # Proceed if 'time' column is present
     df['time'] = pd.to_datetime(df['time'], format='%H:%M:%S')
     
     df_second = df.groupby(df['time'].dt.floor('S')).size().reset_index(name='count_per_second')
@@ -264,6 +377,8 @@ def update_traffic_graph(timestamp_data):
     cumulative_graph = px.line(df_second, x='time', y='cumulative_count', title="Cumulative Traffic", template="plotly_dark", height=325)
 
     return traffic_graph, cumulative_graph
+
+
 # Function to generate a random color for each class
 def get_random_color():
     return (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))

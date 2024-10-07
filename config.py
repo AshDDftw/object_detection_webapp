@@ -1,10 +1,8 @@
-# config.py
+from ultralytics import YOLO
 
-import torch
+# Load the YOLOv8 model for oriented bounding boxes (OBB)
+model_path = "yolov8m-obb.pt"
+model = YOLO(model_path)
 
-# Load the YOLOv5 model once
-model_path = "yolov5s.pt"
-model = torch.hub.load('ultralytics/yolov5', 'custom', path=model_path, force_reload=True, skip_validation=True)
-
-# You can also define other global settings here, like confidence_threshold or class_selection
-confidence_threshold = 0.5  # Default confidence threshold
+# Global settings
+confidence_threshold = 0.5  

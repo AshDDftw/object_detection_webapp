@@ -1,15 +1,17 @@
-import streamlit as st
-import tempfile
 import cv2
-import config
-from app_utils import process_frame, update_histogram, calculate_area_proportions, update_vehicle_proportion_chart, update_traffic_graph, apply_weather_effect
-import time
+import numpy as np
+import streamlit as st
 from datetime import datetime, timedelta
-import plotly.express as px
+from app_utils import process_frame, update_histogram, calculate_area_proportions, update_vehicle_proportion_chart, update_traffic_graph, apply_weather_effect,generate_heatmap
+import time
+import tempfile
+import config
 
 # Initialize global variable to store traffic data (last 10 seconds)
 traffic_data = []
 
+
+# Function to run video detection and generate heatmaps for each frame
 def run_video_detection(
     confidence_threshold, 
     class_selection, 
@@ -54,6 +56,11 @@ def run_video_detection(
             rgb_frame = cv2.cvtColor(weather_frame, cv2.COLOR_BGR2RGB)
             frame_placeholder.image(rgb_frame, use_column_width=True)
 
+            # Generate the heatmap for the frame
+            heatmap_overlay = generate_heatmap(weather_frame, results)
+
+            
+
             # Update the traffic_data list with new timestamps and class counts
             global traffic_data
             for i, cls in enumerate(timestamp_data["class"]):
@@ -77,8 +84,6 @@ def run_video_detection(
             # Keep only the last 10 seconds of data
             traffic_data = [data for data in traffic_data if data["time"] >= (datetime.now() - timedelta(seconds=10)).strftime('%H:%M:%S')]
 
-            # print('Updated Traffic Data:', traffic_data)
-
             # Update the graphs even if no objects were detected
             histogram = update_histogram(results, class_selection)
 
@@ -95,7 +100,7 @@ def run_video_detection(
 
             # Display traffic and cumulative graphs
             traffic_graph_placeholder.plotly_chart(traffic_graph, use_container_width=True)
-            cumulative_graph_placeholder.plotly_chart(cumulative_graph, use_container_width=True)
+            cumulative_graph_placeholder.image(heatmap_overlay, use_column_width=True)
 
             # Ensure class distribution histogram is shown
             class_distribution_placeholder.plotly_chart(histogram, use_container_width=True)

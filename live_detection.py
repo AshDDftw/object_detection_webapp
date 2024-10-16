@@ -10,12 +10,10 @@ import plotly.express as px
 import av
 import pandas as pd
 import config
-from app_utils import update_histogram, calculate_area_proportions, update_vehicle_proportion_chart, update_traffic_graph, apply_weather_effect
-
+from app_utils import update_histogram, calculate_area_proportions, update_vehicle_proportion_chart, update_traffic_graph, apply_weather_effect,generate_heatmap
 
 # Global variable to store traffic data (last 10 seconds)
 traffic_data = []
-
 
 
 class YOLOv8VideoProcessor(VideoProcessorBase):
@@ -50,7 +48,7 @@ class YOLOv8VideoProcessor(VideoProcessorBase):
         end_time = time.time()
         self.results = results
 
-        obb_results=self.results[0].obb()
+        obb_results = getattr(self.results[0], 'obb', None)  # Safely get OBB results, might be None
 
         # Calculate frame area and fps
         self.frame_area = processed_frame.shape[0] * processed_frame.shape[1]
@@ -60,34 +58,36 @@ class YOLOv8VideoProcessor(VideoProcessorBase):
         # Process detected objects and update the class count
         class_count = {name: 0 for name in config.model.names.values()}
         
-        for i in range(obb_results.shape[0]):
-            xywhr = obb_results.data[i][:5]  # Get the xywhr coordinates
-            conf = obb_results.data[i][5].item()  # Get the confidence score
-            cls_idx = int(obb_results.data[i][6].item())  # Get the class index
+        if obb_results is not None:
+            for i in range(obb_results.shape[0]):
+                xywhr = obb_results.data[i][:5]  # Get the xywhr coordinates
+                conf = obb_results.data[i][5].item()  # Get the confidence score
+                cls_idx = int(obb_results.data[i][6].item())  # Get the class index
 
-            # Filter results based on confidence threshold and selected classes
-            if conf >= self.confidence_threshold:
-                class_name = self.model.names[cls_idx]
-                if class_name in self.class_selection:
-                    # Increment the class count
-                    class_count[class_name] += 1
+                # Filter results based on confidence threshold and selected classes
+                if conf >= self.confidence_threshold:
+                    class_name = config.model.names[cls_idx]
+                    if class_name in self.class_selection:
+                        # Increment the class count
+                        class_count[class_name] += 1
 
+                        # Draw bounding box on the frame (you can use xyxyxyxy for an 8-point polygon)
+                        xyxyxyxy = obb_results.xyxyxyxy[i]  # 8-point polygon coordinates
 
-                    # Draw bounding box on the frame (you can use xyxyxyxy for an 8-point polygon)
-                    xyxyxyxy = obb_results.xyxyxyxy[i]  # 8-point polygon coordinates
+                        # Convert to integer coordinates for drawing
+                        points = [(int(x), int(y)) for x, y in xyxyxyxy]
 
-                    # Convert to integer coordinates for drawing
-                    points = [(int(x), int(y)) for x, y in xyxyxyxy]
+                        # Draw the oriented bounding box on the frame
+                        cv2.polylines(processed_frame, [np.array(points)], isClosed=True, color=(0, 255, 0), thickness=2)
 
-                    # Draw the oriented bounding box on the frame
-                    cv2.polylines(frame, [np.array(points)], isClosed=True, color=(0, 255, 0), thickness=2)
+                        # Put label and confidence score near the bounding box
+                        label = f'{class_name} {conf:.2f}'
+                        cv2.putText(processed_frame, label, (points[0][0], points[0][1] - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
 
-                    # Put label and confidence score near the bounding box
-                    label = f'{class_name} {conf:.2f}'
-                    cv2.putText(frame, label, (points[0][0], points[0][1] - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+        # Generate the heatmap for the frame and overlay it on the frame
+        overlaid_frame = generate_heatmap(processed_frame, self.results)
 
-        return av.VideoFrame.from_ndarray(processed_frame, format="bgr24")
-
+        return av.VideoFrame.from_ndarray(overlaid_frame, format="bgr24")
 
 # Live detection function
 def run_live_detection(
@@ -143,13 +143,13 @@ def run_live_detection(
                         frame_placeholder.image(rgb_frame, use_column_width=True)
 
                         # Update charts below the video frame
-                        histogram = update_histogram(processor.results,class_selection) or px.bar(
+                        histogram = update_histogram(processor.results, class_selection) or px.bar(
                             title="Waiting for Object Detection...", template="plotly_dark", height=250)
                         
                         pie_chart_1 = calculate_area_proportions(processor.results, processor.frame_area, class_selection) or px.pie(
                             title="No Objects Detected", template="plotly_dark", height=290)
                         
-                        pie_chart_2 = update_vehicle_proportion_chart(processor.results,class_selection) or px.pie(
+                        pie_chart_2 = update_vehicle_proportion_chart(processor.results, class_selection) or px.pie(
                             title="No Vehicles Detected", template="plotly_dark", height=290)
 
                         pie_chart_placeholder_1.plotly_chart(pie_chart_1, use_container_width=True)
@@ -171,7 +171,7 @@ def run_live_detection(
                         traffic_data = [data for data in traffic_data if data["time"] >= (datetime.now() - timedelta(seconds=10)).strftime('%H:%M:%S')]
 
                         # Pass the sliding window traffic data to the update_traffic_graph function
-                        traffic_graph, cumulative_graph = update_traffic_graph(traffic_data, class_selection)
+                        traffic_graph, _ = update_traffic_graph(traffic_data, class_selection)
 
                         # Check if graphs are returned before plotting them
                         if traffic_graph:
@@ -180,15 +180,11 @@ def run_live_detection(
                             traffic_graph_placeholder.plotly_chart(px.line(
                                 title="No Traffic Detected", template="plotly_dark", height=250), use_container_width=True)
 
-                        if cumulative_graph:
-                            cumulative_graph_placeholder.plotly_chart(cumulative_graph, use_container_width=True)
-                        else:
-                            cumulative_graph_placeholder.plotly_chart(px.line(
-                                title="No Cumulative Traffic", template="plotly_dark", height=250), use_container_width=True)
+                        # Display the heatmap in the cumulative graph placeholder
+                        heatmap_frame = generate_heatmap(processed_frame, processor.results)
+                        cumulative_graph_placeholder.image(heatmap_frame, use_column_width=True)
 
                         # Update class distribution histogram
                         class_distribution_placeholder.plotly_chart(histogram, use_container_width=True)
 
             time.sleep(0.1)  # Small sleep to prevent resource overconsumption
-
-

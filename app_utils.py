@@ -277,13 +277,24 @@ def update_histogram(results, class_selection):
     if not hasattr(results[0], 'obb') or results[0].obb is None:
         # Handle the case where no detections were made (no obb data)
         fig = px.bar(title="Waiting for Object Detection...", template="plotly_dark", height=250)
-        fig.update_layout(xaxis={'visible': False}, yaxis={'visible': False}, annotations=[{
-            'text': 'No Objects Detected',
-            'xref': 'paper',
-            'yref': 'paper',
-            'showarrow': False,
-            'font': {'size': 16}
-        }])
+        fig.update_layout(
+    title={
+        'text': "Waiting for Object Detection...",
+        'y': 0.9,  # Vertical position (0 to 1)
+        'x': 0.5,  # Horizontal position (0 to 1)
+        'xanchor': 'center',
+        'yanchor': 'top'
+    },
+    xaxis={'visible': False},
+    yaxis={'visible': False},
+    annotations=[{
+        'text': 'No Objects Detected',
+        'xref': 'paper',
+        'yref': 'paper',
+        'showarrow': False,
+        'font': {'size': 16}
+    }]
+)
         return fig
 
     # Access OBB results
@@ -312,22 +323,43 @@ def update_histogram(results, class_selection):
         df = pd.DataFrame(class_data)
         fig = px.bar(df, x="Classes", y="Count", title="Object Count",
                      color="Classes", template="plotly_dark", height=250)
+        fig.update_layout(
+    title={
+        'text': "Object Count",
+        'y': 0.9,  # Vertical position (0 to 1)
+        'x': 0.5,  # Horizontal position (0 to 1)
+        'xanchor': 'center',
+        'yanchor': 'top'
+    },
+    xaxis={'visible': False},
+    yaxis={'visible': False},
+)
     else:
         fig = px.bar(title="Waiting for Object Detection...", template="plotly_dark", height=250)
-        fig.update_layout(xaxis={'visible': False}, yaxis={'visible': False}, annotations=[{
-            'text': 'No Objects Detected',
-            'xref': 'paper',
-            'yref': 'paper',
-            'showarrow': False,
-            'font': {'size': 16}
-        }])
-
+        fig.update_layout(
+    title={
+        'text': "Waiting for Object Detection...",
+        'y': 0.9,  # Vertical position (0 to 1)
+        'x': 0.5,  # Horizontal position (0 to 1)
+        'xanchor': 'center',
+        'yanchor': 'top'
+    },
+    xaxis={'visible': False},
+    yaxis={'visible': False},
+    annotations=[{
+        'text': 'No Objects Detected',
+        'xref': 'paper',
+        'yref': 'paper',
+        'showarrow': False,
+        'font': {'size': 16}
+    }]
+)
     return fig
 
 
 # Function to update the vehicle proportion pie chart
 def update_vehicle_proportion_chart(results, class_selection):
-    vehicle_classes = {'plane','ship','storage tank','large vehicle','small vehicle','helicopter'}  # Adjust vehicle classes as needed
+    vehicle_classes = class_selection # Adjust vehicle classes as needed
     vehicle_count = {cls: 0 for cls in vehicle_classes if cls in class_selection}
 
     
@@ -364,21 +396,42 @@ def update_vehicle_proportion_chart(results, class_selection):
     filtered_vehicle_count = {k: v for k, v in vehicle_count.items() if v > 0}
 
     if filtered_vehicle_count:
-        vehicle_data = {"Vehicle Type": list(filtered_vehicle_count.keys()), "Count": list(filtered_vehicle_count.values())}
+        vehicle_data = {"Object Type": list(filtered_vehicle_count.keys()), "Count": list(filtered_vehicle_count.values())}
         df = pd.DataFrame(vehicle_data)
         print('vvv',df)
-        fig = px.pie(df, names="Vehicle Type", values="Count", title="Vehicle Proportion",
+        fig = px.pie(df, names="Object Type", values="Count", title="Object Proportion",
                      template="plotly_dark", color_discrete_sequence=px.colors.sequential.RdBu, height=325)
+        fig.update_layout(
+    title={
+        'text': "Object Proportion",
+        'y': 0.9,  # Vertical position (0 to 1)
+        'x': 0.5,  # Horizontal position (0 to 1)
+        'xanchor': 'center',
+        'yanchor': 'top'
+    },
+    xaxis={'visible': False},
+    yaxis={'visible': False},
+)
     else:
-        fig = px.pie(title="No Vehicles Detected", template="plotly_dark", height=325)
-        fig.update_traces(marker=dict(colors=['grey']))
-        fig.update_layout(annotations=[{
-            'text': 'No Vehicles Detected',
-            'xref': 'paper',
-            'yref': 'paper',
-            'showarrow': False,
-            'font': {'size': 16}
-        }])
+        fig = px.bar(title="Waiting for Object Detection...", template="plotly_dark", height=250)
+        fig.update_layout(
+    title={
+        'text': "Waiting for Object Detection...",
+        'y': 0.9,  # Vertical position (0 to 1)
+        'x': 0.5,  # Horizontal position (0 to 1)
+        'xanchor': 'center',
+        'yanchor': 'top'
+    },
+    xaxis={'visible': False},
+    yaxis={'visible': False},
+    annotations=[{
+        'text': 'No Objects Detected',
+        'xref': 'paper',
+        'yref': 'paper',
+        'showarrow': False,
+        'font': {'size': 16}
+    }]
+)
 
     return fig
 
@@ -431,16 +484,37 @@ def calculate_area_proportions(results, frame_area, class_selection):
         print('ccc',df)
         fig = px.pie(df, names="Classes", values="Area", title="Area Proportion",
                      template="plotly_dark", color_discrete_sequence=px.colors.sequential.RdBu, height=280)
+        fig.update_layout(
+    title={
+        'text': "Area Proportion",
+        'y': 0.9,  # Vertical position (0 to 1)
+        'x': 0.5,  # Horizontal position (0 to 1)
+        'xanchor': 'center',
+        'yanchor': 'top'
+    },
+    xaxis={'visible': False},
+    yaxis={'visible': False},
+)
     else:
-        fig = px.pie(title="No Objects Detected", template="plotly_dark", height=290)
-        fig.update_traces(marker=dict(colors=['grey']))
-        fig.update_layout(annotations=[{
-            'text': 'No Objects Detected',
-            'xref': 'paper',
-            'yref': 'paper',
-            'showarrow': False,
-            'font': {'size': 16}
-        }])
+        fig = px.bar(title="Waiting for Object Detection...", template="plotly_dark", height=250)
+        fig.update_layout(
+    title={
+        'text': "Waiting for Object Detection...",
+        'y': 0.9,  # Vertical position (0 to 1)
+        'x': 0.5,  # Horizontal position (0 to 1)
+        'xanchor': 'center',
+        'yanchor': 'top'
+    },
+    xaxis={'visible': False},
+    yaxis={'visible': False},
+    annotations=[{
+        'text': 'No Objects Detected',
+        'xref': 'paper',
+        'yref': 'paper',
+        'showarrow': False,
+        'font': {'size': 16}
+    }]
+)
 
     return fig
 
@@ -453,9 +527,10 @@ def update_traffic_graph(timestamp_data, class_selection):
         # Return empty figures if no valid data exists
         traffic_graph = px.line(title="No Traffic Data", template="plotly_dark", height=250)
         cumulative_graph = px.line(title="No Cumulative Data", template="plotly_dark", height=325)
-        print('zzzzzzz')
+        traffic_graph.update_layout(xaxis={'visible': True, 'showgrid': True}, yaxis={'visible': True, 'showgrid': True}, title_x=0.5)
+        cumulative_graph.update_layout(xaxis={'visible': True, 'showgrid': True}, yaxis={'visible': True, 'showgrid': True}, title_x=0.5)
         return traffic_graph, cumulative_graph
-    
+
     # Convert the list of dictionaries to a DataFrame
     df = pd.DataFrame(timestamp_data)
 
@@ -463,7 +538,8 @@ def update_traffic_graph(timestamp_data, class_selection):
     if 'time' not in df.columns or df.empty:
         traffic_graph = px.line(title="No Traffic Data", template="plotly_dark", height=250)
         cumulative_graph = px.line(title="No Cumulative Data", template="plotly_dark", height=325)
-        
+        traffic_graph.update_layout(xaxis={'visible': True, 'showgrid': True}, yaxis={'visible': True, 'showgrid': True})
+        cumulative_graph.update_layout(xaxis={'visible': True, 'showgrid': True}, yaxis={'visible': True, 'showgrid': True})
         return traffic_graph, cumulative_graph
 
     # Filter by class selection
@@ -483,7 +559,9 @@ def update_traffic_graph(timestamp_data, class_selection):
     # Convert time back to HH:MM:SS format for plotting
     df_second['time'] = df_second['time'].dt.strftime('%H:%M:%S')
 
-    print('sss', df_second)
+    # Handle case for single data point
+    if len(df_second) == 1:
+        df_second = df_second.append({'time': df_second['time'].iloc[0], 'class': df_second['class'].iloc[0], 'count_per_second': 0, 'cumulative_count': 0}, ignore_index=True)
 
     # Traffic per second for each class
     traffic_graph = px.line(df_second, x='time', y='count_per_second', color='class', title="Traffic Per Second by Class", 
@@ -492,6 +570,10 @@ def update_traffic_graph(timestamp_data, class_selection):
     # Cumulative traffic over time for each class
     cumulative_graph = px.line(df_second, x='time', y='cumulative_count', color='class', title="Cumulative Traffic by Class", 
                                template="plotly_dark", height=325)
+
+    # Ensure axes visibility and grid lines, and center the title
+    traffic_graph.update_layout(xaxis={'visible': True, 'showgrid': True}, yaxis={'visible': True, 'showgrid': True})
+    cumulative_graph.update_layout(xaxis={'visible': True, 'showgrid': True}, yaxis={'visible': True, 'showgrid': True})
 
     return traffic_graph, cumulative_graph
 
@@ -550,3 +632,37 @@ def apply_weather_effect(frame, weather_type="normal"):
     else:
         # If the weather type is not recognized, return the original frame
         return frame
+
+
+def generate_heatmap(frame, results, colormap=cv2.COLORMAP_JET):
+    # Create a blank heatmap with the same dimensions as the frame
+    heatmap = np.zeros((frame.shape[0], frame.shape[1]), dtype=np.float32)
+
+    # Check if there are any detections and process them
+    if results is not None and results[0].obb is not None:
+        obb_results = results[0].obb
+        for i in range(obb_results.shape[0]):
+            xywhr = obb_results.data[i][:5]  # Get the bounding box (x_center, y_center, width, height, rotation)
+            cls_idx = int(obb_results.data[i][6].item())  # Get the class index
+
+            # Draw a rectangle on the heatmap where the object was detected
+            width = int(xywhr[2].item())  # Width of the bounding box
+            height = int(xywhr[3].item())  # Height of the bounding box
+            center_x = int(xywhr[0].item())  # X-center of the bounding box
+            center_y = int(xywhr[1].item())  # Y-center of the bounding box
+
+            # Create the bounding box as a rectangle in the heatmap (use width and height)
+            top_left = (max(0, center_x - width // 2), max(0, center_y - height // 2))
+            bottom_right = (min(frame.shape[1], center_x + width // 2), min(frame.shape[0], center_y + height // 2))
+            cv2.rectangle(heatmap, top_left, bottom_right, (255,), thickness=-1)
+
+    # Normalize the heatmap to range between 0 and 255
+    heatmap = cv2.normalize(heatmap, None, 0, 255, cv2.NORM_MINMAX)
+
+    # Apply colormap to the heatmap
+    colored_heatmap = cv2.applyColorMap(heatmap.astype(np.uint8), colormap)
+
+    # Overlay the heatmap on the original frame
+    overlaid_frame = cv2.addWeighted(frame, 0.6, colored_heatmap, 0.4, 0)
+
+    return overlaid_frame

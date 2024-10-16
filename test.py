@@ -7,11 +7,12 @@ import config
 # Set up Streamlit
 st.set_page_config(page_title="Real-Time YOLOv5 Object Detection", page_icon="✅", layout="wide")
 
+# Custom CSS for styling
 st.markdown("""
     <style>
     .css-18e3th9 { padding-top: 0.5rem; padding-bottom: 0.5rem; }
     .css-1d391kg { padding-top: 0.5rem; padding-bottom: 0.5rem; }
-    .stApp { background-color: #6b38b5; padding-left: 0px; padding-right: 0px;} /* Light background */
+    .stApp { background-color: #6b38b5; padding-left: 20px; padding-right: 20px;} /* Add padding from screen edges */
 
     /* Style the title */
     .title {
@@ -22,13 +23,6 @@ st.markdown("""
         text-align: center;
         margin-top: 20px;
         margin-bottom: 20px;
-        background-color:#FBE9D0:
-    }
-
-    /* Make the content edge-to-edge */
-    .main {
-        padding-left: 0px;
-        padding-right: 0px;
     }
 
     /* Professional colors for blocks */
@@ -38,7 +32,7 @@ st.markdown("""
         border-radius: 10px; 
         color: white; 
         text-align: center; 
-        margin-bottom: 30px; /* Increase margin-bottom for more padding */
+        margin-bottom: 20px; /* Leave space between elements */
     }
     .block-orange { 
         background-color: #F39C12; 
@@ -46,7 +40,7 @@ st.markdown("""
         border-radius: 10px; 
         color: white; 
         text-align: center; 
-        margin-bottom: 30px; /* Increase margin-bottom for more padding */
+        margin-bottom: 20px; /* Leave space between elements */
     }
     .block-yellow { 
         background-color: #F1C40F; 
@@ -54,7 +48,7 @@ st.markdown("""
         border-radius: 10px; 
         color: black; 
         text-align: center; 
-        margin-bottom: 30px; /* Increase margin-bottom for more padding */
+        margin-bottom: 20px; /* Leave space between elements */
     }
     .block-green { 
         background-color: #27AE60; 
@@ -62,31 +56,65 @@ st.markdown("""
         border-radius: 10px; 
         color: white; 
         text-align: center; 
-        margin-bottom: 30px; /* Increase margin-bottom for more padding */
+        margin-bottom: 20px; /* Leave space between elements */
     }
 
-    /* Remove padding and margin at the bottom to prevent large gap */
-    .main .block-container {
-        padding-bottom: 0px !important;
-        margin-bottom: 0px !important;
-    }
+    /* Add padding between columns and sections */
+    .stColumn { padding-right: 10px; padding-left: 10px; } /* Adds space between columns */
+    .stFrame { margin-top: 20px; } /* Adds space between frame and other elements */
 
-    /* Add margin-top to the frame to bring it down */
-    .stFrame {
-        margin-top: 30px; /* Adjust this value as needed */
-    }
+    /* Add margin below the metric blocks */
+    .metric-block { margin-bottom: 30px !important; }  /* Add space below metric blocks */
+
+    /* Add spacing between sections */
+    .stBlock-container { margin-bottom: 20px; }
     </style>
-    """, unsafe_allow_html=True)
+""", unsafe_allow_html=True)
 
 # Add title with new styling
-st.markdown('<h1 class="title">Object Detection Dashboard</h1>', unsafe_allow_html=True)
+st.markdown('<h1 class="title">Aerial Vision: Object Detection Dashboard</h1>', unsafe_allow_html=True)
+
+# Metric placeholders at the top
+metric_col1, metric_col2, metric_col3, metric_col4 = st.columns(4, gap="small")
+with metric_col1:
+    total_objects_placeholder = st.empty()
+with metric_col2:
+    fps_placeholder = st.empty()
+with metric_col3:
+    resolution_placeholder = st.empty()
+with metric_col4:
+    inference_speed_placeholder = st.empty()
+
+# Insert margin below the metric blocks using Streamlit markdown
+st.markdown("<div class='metric-block'></div>", unsafe_allow_html=True)
+
+# Main layout: Vehicle Proportion and Traffic Graph on the Left, Input Frame on the Right
+left_col, right_col = st.columns([2, 3], gap="medium")
+
+with left_col:
+    pie_chart_placeholder_1 = st.empty()  # Vehicle Proportion
+    traffic_graph_placeholder = st.empty()  # Traffic Graph
+
+with right_col:
+    frame_placeholder = st.empty()  # Display input image/video
 
 
-# Sidebar options
+st.markdown("<div style='margin-bottom: 20px;'></div>", unsafe_allow_html=True)  # Add space before the frame
+class_distribution_placeholder = st.empty()  # Below the frame: Class distribution histogram (full width)
+
+# Full-width Class Distribution Histogram Below the Frame and Graphs
+st.markdown("<div style='margin-bottom: 20px;'></div>", unsafe_allow_html=True)  # Add space between sections
+st.markdown('<hr style="border:1px solid #FFFFFF;">', unsafe_allow_html=True)  # Horizontal line between sections
+
+# Bottom section: Object Proportion Pie Chart and Heatmap side by side
+bottom_col1, bottom_col2 = st.columns(2, gap="medium")
+with bottom_col1:
+    pie_chart_placeholder_2 = st.empty()  # Object proportion pie chart
+with bottom_col2:
+    cumulative_graph_placeholder = st.empty()  # Heatmap placeholder
+
+# Sidebar options for detection mode
 detection_mode = st.sidebar.radio("Detection Mode", ("Live Detection", "Upload Image", "Upload Video"))
-
-
-
 
 class_selection = st.sidebar.multiselect("Select Classes to Detect", options=list(config.model.names.values()), default=None)
 if not class_selection:
@@ -100,34 +128,6 @@ weather_conditions = st.sidebar.selectbox(
     ("Normal", "Rainy", "Cloudy", "Foggy", "Other")
 )
 
-# Metric placeholders above the frame with padding
-metric_col1, metric_col2, metric_col3, metric_col4 = st.columns([1, 1, 1, 1])
-with metric_col1:
-    total_objects_placeholder = st.empty()
-with metric_col2:
-    fps_placeholder = st.empty()
-with metric_col3:
-    resolution_placeholder = st.empty()
-with metric_col4:
-    inference_speed_placeholder = st.empty()
-
-# Layout for the frame, pie charts, and traffic plots with padding between them
-main_col1, main_col2, main_col3 = st.columns([2, 4, 2], gap="medium")
-
-with main_col1:
-    pie_chart_placeholder_1 = st.empty()  # Left pie chart placeholder
-    pie_chart_placeholder_2 = st.empty()  # Left second pie chart placeholder
-
-with main_col2:
-    frame_placeholder = st.empty()  # Center frame placeholder
-    class_distribution_placeholder = st.empty()
-
-with main_col3:
-    traffic_graph_placeholder = st.empty()  # Right traffic graph placeholder
-    cumulative_graph_placeholder = st.empty()  # Right cumulative traffic graph placeholder
-
-
-
 # Function to update metric blocks dynamically
 def update_metric_blocks(total_objects, fps_value, resolution_width, resolution_height, inference_speed_value):
     total_objects_placeholder.markdown(f"""
@@ -135,8 +135,7 @@ def update_metric_blocks(total_objects, fps_value, resolution_width, resolution_
         padding: 10px; 
         border-radius: 10px; 
         color: white; 
-        text-align: center; 
-        margin-bottom: 30px;">
+        text-align: center;">
             <h3>Total Objects</h3>
             <h2>{total_objects}</h2>
         </div>
@@ -147,8 +146,7 @@ def update_metric_blocks(total_objects, fps_value, resolution_width, resolution_
         padding: 10px; 
         border-radius: 10px; 
         color: white; 
-        text-align: center; 
-        margin-bottom: 30px; ">
+        text-align: center;">
             <h3>FPS</h3>
             <h2>{fps_value:.2f}</h2>
         </div>
@@ -159,8 +157,7 @@ def update_metric_blocks(total_objects, fps_value, resolution_width, resolution_
         padding: 10px; 
         border-radius: 10px; 
         color: black; 
-        text-align: center; 
-        margin-bottom: 30px;">
+        text-align: center;">
             <h3>Resolution</h3>
             <h2>{resolution_width}x{resolution_height}</h2>
         </div>
@@ -171,13 +168,11 @@ def update_metric_blocks(total_objects, fps_value, resolution_width, resolution_
         padding: 10px; 
         border-radius: 10px; 
         color: black; 
-        text-align: center; 
-        margin-bottom: 30px;">
+        text-align: center;">
             <h3>Inference (ms)</h3>
             <h2>{inference_speed_value:.2f}</h2>
         </div>
     """, unsafe_allow_html=True)
-
 
 # Switch between detection modes
 if detection_mode == "Live Detection":

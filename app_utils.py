@@ -19,56 +19,67 @@ import numpy as np
 timestamp_data = {"time": [], "class": [], "count": []}
 color_map = {}
 
-# Function to process a single frame (image/video)
-# Function to process a single frame (image/video)
+
 def process_frame(frame, model, confidence_threshold, class_selection):
     start_time = time.time()
 
-    # Object detection on the frame using YOLOv8 model
-    results = model(frame)
+    # Perform object detection using YOLOv8 model and get OBB results
+    results = model.predict(frame)
+    obb_results = results[0].obb  # Extract oriented bounding boxes (OBBs)
 
+    # Measure inference time and FPS
     end_time = time.time()
+    inference_speed = (end_time - start_time) * 1000  # Convert to milliseconds
+    fps = 1 / (end_time - start_time) if (end_time - start_time) > 0 else 0  # FPS
 
-    # Calculate metrics
-    inference_speed = calculate_inference_speed(start_time, end_time)
-    fps = calculate_fps(start_time, end_time)
-    frame_area = frame.shape[0] * frame.shape[1]
+    frame_area = frame.shape[0] * frame.shape[1]  # Calculate frame area
 
     # Initialize class count and timestamp data
-    class_count = {name: 0 for name in model.names}
+    class_count = {name: 0 for name in model.names.values()}
     timestamp_data = {"time": [], "class": [], "count": []}
 
     current_time = datetime.now().strftime('%H:%M:%S')
-    objects_detected = False  # Flag to check if any objects are detected
 
-    # Check if any results were returned
-    if not results or results[0].boxes is None or len(results[0].boxes) == 0:
-        # If no objects are detected, return 0 count
+    # Check if there are any boxes detected
+    if obb_results is None or len(obb_results) == 0:
+        # No detections, return empty counts
         timestamp_data["time"].append(current_time)
         timestamp_data["class"].append("None")
         timestamp_data["count"].append(0)
-        return None, class_count, frame_area, fps, inference_speed, timestamp_data
+        return frame, class_count, frame_area, fps, inference_speed, timestamp_data
 
-    for result in results:
-        boxes = result.boxes
-        for box in boxes:
-            cls = int(box.cls[0])  # Class index
-            conf = float(box.conf[0])  # Confidence score
-            if conf > confidence_threshold:
-                class_name = model.names[cls]
-                if class_name in class_selection:
-                    class_count[class_name] += 1
-                    timestamp_data["time"].append(current_time)
-                    timestamp_data["class"].append(class_name)
-                    timestamp_data["count"].append(class_count[class_name])
-                    objects_detected = True
+    # Loop through each detected box and process the results
+    for i in range(obb_results.shape[0]):
+        xywhr = obb_results.data[i][:5]  # Get the xywhr coordinates
+        conf = obb_results.data[i][5].item()  # Get the confidence score
+        cls_idx = int(obb_results.data[i][6].item())  # Get the class index
 
-    # If no objects are detected, return a zero count for traffic graph purposes
-    if not objects_detected:
-        timestamp_data["time"].append(current_time)
-        timestamp_data["class"].append("None")
-        timestamp_data["count"].append(0)
+        # Filter results based on confidence threshold and selected classes
+        if conf >= confidence_threshold:
+            class_name = model.names[cls_idx]
+            if class_name in class_selection:
+                # Increment the class count
+                class_count[class_name] += 1
 
+                # Add timestamp data for detected objects
+                timestamp_data["time"].append(current_time)
+                timestamp_data["class"].append(class_name)
+                timestamp_data["count"].append(class_count[class_name])
+
+                # Draw bounding box on the frame (you can use xyxyxyxy for an 8-point polygon)
+                xyxyxyxy = obb_results.xyxyxyxy[i]  # 8-point polygon coordinates
+
+                # Convert to integer coordinates for drawing
+                points = [(int(x), int(y)) for x, y in xyxyxyxy]
+
+                # Draw the oriented bounding box on the frame
+                cv2.polylines(frame, [np.array(points)], isClosed=True, color=(0, 255, 0), thickness=2)
+
+                # Put label and confidence score near the bounding box
+                label = f'{class_name} {conf:.2f}'
+                cv2.putText(frame, label, (points[0][0], points[0][1] - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+
+    # Return the annotated frame, class count, frame area, FPS, inference speed, and timestamp data
     return results, class_count, frame_area, fps, inference_speed, timestamp_data
 
 
@@ -120,104 +131,104 @@ def process_frame(frame, model, confidence_threshold, class_selection):
 
 #         return class_count
 
-import cv2
-import av
-import threading
-import config
-from streamlit_webrtc import VideoProcessorBase
+# import cv2
+# import av
+# import threading
+# import config
+# from streamlit_webrtc import VideoProcessorBase
 
-class YOLOv8VideoProcessor(VideoProcessorBase):
-    def __init__(self):
-        self.confidence_threshold = 0.5  # Set a default confidence threshold
-        self.class_selection = []  # Selected classes
-        self.lock = threading.Lock()  # Ensure thread-safe access
-        self.results = None
-        self.current_class_count = {}
-        self.fps = 0
-        self.inference_speed = 0
-        self.frame_area = 0
-        self.model = config.model  # Load YOLOv8 model
+# class YOLOv8VideoProcessor(VideoProcessorBase):
+#     def __init__(self):
+#         self.confidence_threshold = 0.5  # Set a default confidence threshold
+#         self.class_selection = []  # Selected classes
+#         self.lock = threading.Lock()  # Ensure thread-safe access
+#         self.results = None
+#         self.current_class_count = {}
+#         self.fps = 0
+#         self.inference_speed = 0
+#         self.frame_area = 0
+#         self.model = config.model  # Load YOLOv8 model
 
-    def update_params(self, confidence_threshold, class_selection, weather_conditions='Normal'):
-        with self.lock:
-            self.confidence_threshold = confidence_threshold
-            self.class_selection = class_selection
-            self.weather_conditions = weather_conditions
+#     def update_params(self, confidence_threshold, class_selection, weather_conditions='Normal'):
+#         with self.lock:
+#             self.confidence_threshold = confidence_threshold
+#             self.class_selection = class_selection
+#             self.weather_conditions = weather_conditions
 
-    def recv(self, frame):
-        img = frame.to_ndarray(format="bgr24")  # Get the video frame as a NumPy array
+#     def recv(self, frame):
+#         img = frame.to_ndarray(format="bgr24")  # Get the video frame as a NumPy array
 
-        # Debugging: Check if the frame is captured
-        print("Captured frame shape:", img.shape)
+#         # Debugging: Check if the frame is captured
+#         print("Captured frame shape:", img.shape)
 
-        # Process frame and collect metrics
-        try:
-            # Apply weather effect (e.g., cloudy) to the frame
-            processed_frame = apply_weather_effect(img, self.weather_conditions)
+#         # Process frame and collect metrics
+#         try:
+#             # Apply weather effect (e.g., cloudy) to the frame
+#             processed_frame = apply_weather_effect(img, self.weather_conditions)
 
-            # Run YOLOv8 model on the processed frame
-            results = self.model(processed_frame)
+#             # Run YOLOv8 model on the processed frame
+#             results = self.model(processed_frame)
 
-            # Measure inference speed and frame area
-            frame_area = processed_frame.shape[0] * processed_frame.shape[1]
+#             # Measure inference speed and frame area
+#             frame_area = processed_frame.shape[0] * processed_frame.shape[1]
 
-            # Extract and count detections
-            current_class_count = self.get_class_count(results)
-            fps = 1 / results.t if results.t > 0 else 0
-            inference_speed = results.t * 1000  # Convert inference time to ms
+#             # Extract and count detections
+#             current_class_count = self.get_class_count(results)
+#             fps = 1 / results.t if results.t > 0 else 0
+#             inference_speed = results.t * 1000  # Convert inference time to ms
 
-        except Exception as e:
-            print("Error in frame processing:", str(e))
-            return av.VideoFrame.from_ndarray(processed_frame, format="bgr24")
+#         except Exception as e:
+#             print("Error in frame processing:", str(e))
+#             return av.VideoFrame.from_ndarray(processed_frame, format="bgr24")
 
-        # Update class state safely with a lock
-        with self.lock:
-            self.results = results
-            self.current_class_count = current_class_count
-            self.frame_area = frame_area
-            self.fps = fps
-            self.inference_speed = inference_speed
+#         # Update class state safely with a lock
+#         with self.lock:
+#             self.results = results
+#             self.current_class_count = current_class_count
+#             self.frame_area = frame_area
+#             self.fps = fps
+#             self.inference_speed = inference_speed
 
-        # Draw bounding boxes and labels on the frame
-        for result in results:
-            boxes = result.boxes
-            for box in boxes:
-                cls = int(box.cls[0])  # Class index
-                conf = float(box.conf[0])  # Confidence score
-                if conf > self.confidence_threshold:
-                    class_name = self.model.names[cls]
-                    if class_name in self.class_selection:
-                        label = f'{class_name} {conf:.2f}'
+#         # Draw bounding boxes and labels on the frame
+#         for result in results:
+#             boxes = result.boxes
+#             for box in boxes:
+#                 cls = int(box.cls[0])  # Class index
+#                 conf = float(box.conf[0])  # Confidence score
+#                 if conf > self.confidence_threshold:
+#                     class_name = self.model.names[cls]
+#                     if class_name in self.class_selection:
+#                         label = f'{class_name} {conf:.2f}'
 
-                        # Get the bounding box coordinates
-                        x1, y1, x2, y2 = map(int, box.xyxy[0])
+#                         # Get the bounding box coordinates
+#                         x1, y1, x2, y2 = map(int, box.xyxy[0])
 
-                        # Draw bounding box and label
-                        cv2.rectangle(processed_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-                        cv2.putText(processed_frame, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+#                         # Draw bounding box and label
+#                         cv2.rectangle(processed_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+#                         cv2.putText(processed_frame, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
 
-        # Debugging: Ensure the image is properly processed
-        print("Processed frame ready for rendering")
+#         # Debugging: Ensure the image is properly processed
+#         print("Processed frame ready for rendering")
 
-        # Return the processed frame
-        return av.VideoFrame.from_ndarray(processed_frame, format="bgr24")
+#         # Return the processed frame
+#         return av.VideoFrame.from_ndarray(processed_frame, format="bgr24")
 
-    def get_class_count(self, results):
-        # Initialize a dictionary for class counts
-        class_count = {name: 0 for name in self.model.names}
+#     def get_class_count(self, results):
+#         # Initialize a dictionary for class counts
+#         class_count = {name: 0 for name in self.model.names}
 
-        # Count objects detected in the frame
-        for result in results:
-            boxes = result.boxes
-            for box in boxes:
-                cls = int(box.cls[0])
-                conf = float(box.conf[0])
-                if conf > self.confidence_threshold:
-                    class_name = self.model.names[cls]
-                    if class_name in self.class_selection:
-                        class_count[class_name] += 1
+#         # Count objects detected in the frame
+#         for result in results:
+#             boxes = result.boxes
+#             for box in boxes:
+#                 cls = int(box.cls[0])
+#                 conf = float(box.conf[0])
+#                 if conf > self.confidence_threshold:
+#                     class_name = self.model.names[cls]
+#                     if class_name in self.class_selection:
+#                         class_count[class_name] += 1
 
-        return class_count
+#         return class_count
 
 
 # Function to update the metric blocks
@@ -259,7 +270,38 @@ def calculate_fps(start_time, end_time):
     return 1 / (end_time - start_time) if (end_time - start_time) > 0 else 0
 
 # Function to update the histogram
-def update_histogram(class_count):
+def update_histogram(results, class_selection):
+    class_count = {name: 0 for name in class_selection}
+
+    # Ensure that results have the necessary attributes before proceeding
+    if not hasattr(results[0], 'obb') or results[0].obb is None:
+        # Handle the case where no detections were made (no obb data)
+        fig = px.bar(title="Waiting for Object Detection...", template="plotly_dark", height=250)
+        fig.update_layout(xaxis={'visible': False}, yaxis={'visible': False}, annotations=[{
+            'text': 'No Objects Detected',
+            'xref': 'paper',
+            'yref': 'paper',
+            'showarrow': False,
+            'font': {'size': 16}
+        }])
+        return fig
+
+    # Access OBB results
+    obb_results = results[0].obb
+
+    # Loop through each detected object and process the results
+    for i in range(obb_results.shape[0]):
+        # Check if the detection has at least 7 elements
+        if obb_results.data[i].size(0) >= 7:
+            conf = obb_results.data[i][5].item()  # Confidence score
+            cls_idx = int(obb_results.data[i][6].item())  # Class index
+
+            # Filter based on confidence threshold and selected classes
+            if conf > 0.5:
+                class_name = config.model.names[cls_idx]
+                if class_name in class_selection:
+                    class_count[class_name] += 1
+
     filtered_class_count = {k: v for k, v in class_count.items() if v > 0}
 
     if filtered_class_count:
@@ -279,16 +321,52 @@ def update_histogram(class_count):
             'showarrow': False,
             'font': {'size': 16}
         }])
+
     return fig
 
-# Function to update the vehicle proportion pie chart
-def update_vehicle_proportion_chart(class_count):
-    vehicle_classes = ['car', 'truck', 'bus', 'motorcycle']  # Adjust vehicle classes as needed
-    vehicle_count = {cls: class_count[cls] for cls in vehicle_classes if cls in class_count and class_count[cls] > 0}
 
-    if vehicle_count:
-        vehicle_data = {"Vehicle Type": list(vehicle_count.keys()), "Count": list(vehicle_count.values())}
+# Function to update the vehicle proportion pie chart
+def update_vehicle_proportion_chart(results, class_selection):
+    vehicle_classes = {'plane','ship','storage tank','large vehicle','small vehicle','helicopter'}  # Adjust vehicle classes as needed
+    vehicle_count = {cls: 0 for cls in vehicle_classes if cls in class_selection}
+
+    
+    if not hasattr(results[0], 'obb') or results[0].obb is None:
+        # Handle the case where no detections were made (no obb data)
+        fig = px.bar(title="Waiting for Object Detection...", template="plotly_dark", height=250)
+        fig.update_layout(xaxis={'visible': False}, yaxis={'visible': False}, annotations=[{
+            'text': 'No Objects Detected',
+            'xref': 'paper',
+            'yref': 'paper',
+            'showarrow': False,
+            'font': {'size': 16}
+        }])
+        return fig
+    
+    # Access OBB results
+    obb_results = results[0].obb
+
+    # Loop through each detected object and process the results
+    for i in range(obb_results.shape[0]):
+        # Check if the detection has at least 7 elements
+        if obb_results.data[i].size(0) >= 7:
+            # Extract confidence and class info
+            conf = obb_results.data[i][5].item()  # Confidence score
+            cls_idx = int(obb_results.data[i][6].item())  # Class index
+            
+            # Filter based on confidence threshold
+            if conf > 0.5:
+                class_name = config.model.names[cls_idx]
+                if class_name in vehicle_classes and class_name in class_selection:
+                    vehicle_count[class_name] += 1
+
+    # Filter out classes with zero counts
+    filtered_vehicle_count = {k: v for k, v in vehicle_count.items() if v > 0}
+
+    if filtered_vehicle_count:
+        vehicle_data = {"Vehicle Type": list(filtered_vehicle_count.keys()), "Count": list(filtered_vehicle_count.values())}
         df = pd.DataFrame(vehicle_data)
+        print('vvv',df)
         fig = px.pie(df, names="Vehicle Type", values="Count", title="Vehicle Proportion",
                      template="plotly_dark", color_discrete_sequence=px.colors.sequential.RdBu, height=325)
     else:
@@ -301,33 +379,47 @@ def update_vehicle_proportion_chart(class_count):
             'showarrow': False,
             'font': {'size': 16}
         }])
+
     return fig
+
 
 # Function to calculate area proportions and plot a pie chart
 def calculate_area_proportions(results, frame_area, class_selection):
     area_dict = {name: 0 for name in class_selection}
+    
+    if not hasattr(results[0], 'obb') or results[0].obb is None:
+        # Handle the case where no detections were made (no obb data)
+        fig = px.bar(title="Waiting for Object Detection...", template="plotly_dark", height=250)
+        fig.update_layout(xaxis={'visible': False}, yaxis={'visible': False}, annotations=[{
+            'text': 'No Objects Detected',
+            'xref': 'paper',
+            'yref': 'paper',
+            'showarrow': False,
+            'font': {'size': 16}
+        }])
+        return fig
+    # Access OBB results
+    obb_results = results[0].obb
 
-    for result in results:
-        boxes = result.boxes  # Boxes object
-        if boxes is None or len(boxes) == 0:  # Check if boxes are None or empty
-            print(" ")
-            continue  # Skip to the next frame if no boxes are detected
+    # Loop through each detected object and process the results
+    for i in range(obb_results.shape[0]):
+        # Check if the detection has the minimum 7 attributes (x_center, y_center, width, height, rotation, confidence, class_id)
+        if obb_results.data[i].size(0) >= 7:
+            # Extract the bounding box coordinates and class info
+            conf = obb_results.data[i][5].item()  # Get the confidence score
+            cls_idx = int(obb_results.data[i][6].item())  # Get the class index
+            
+            # Filter results based on confidence threshold and selected classes
+            if conf > 0.5:  # Use confidence threshold
+                class_name = config.model.names[cls_idx]
+                if class_name in class_selection:
+                    # Calculate the area of the detected bounding box
+                    width = obb_results.data[i][2].item()  # Width of the bounding box
+                    height = obb_results.data[i][3].item()  # Height of the bounding box
+                    area = width * height
+                    area_dict[class_name] += area
 
-        for result in results:
-            boxes = result.boxes
-            for box in boxes:
-                conf = float(box.conf[0])
-                cls = int(box.cls[0])
-                if conf > 0.5:  # Use confidence threshold
-                    class_name = config.model.names[cls]
-                    if class_name in class_selection:
-                        # Extract xyxy coordinates
-                        x1, y1, x2, y2 = map(int, box.xyxy[0])
-                        width = x2 - x1
-                        height = y2 - y1
-                        area = width * height
-                        area_dict[class_name] += area
-
+    # Filter out zero-area classes
     filtered_area_dict = {k: v for k, v in area_dict.items() if v > 0}
 
     if filtered_area_dict:
@@ -336,6 +428,7 @@ def calculate_area_proportions(results, frame_area, class_selection):
             "Area": [area / frame_area * 100 for area in filtered_area_dict.values()]
         }
         df = pd.DataFrame(area_data)
+        print('ccc',df)
         fig = px.pie(df, names="Classes", values="Area", title="Area Proportion",
                      template="plotly_dark", color_discrete_sequence=px.colors.sequential.RdBu, height=280)
     else:
@@ -352,31 +445,59 @@ def calculate_area_proportions(results, frame_area, class_selection):
     return fig
 
 
-def update_traffic_graph(timestamp_data):
-    # Check if the 'time' key exists in the dictionary
-    if not timestamp_data or 'time' not in timestamp_data:
-        print(" ")
-        return None, None  # Return empty graphs if there's no valid data
+
+def update_traffic_graph(timestamp_data, class_selection):
+    # Check if timestamp_data is valid (non-empty list and contains the necessary keys)
+    if not timestamp_data or not all('time' in entry and 'class' in entry and 'count' in entry for entry in timestamp_data):
+        print('incoming', timestamp_data)
+        # Return empty figures if no valid data exists
+        traffic_graph = px.line(title="No Traffic Data", template="plotly_dark", height=250)
+        cumulative_graph = px.line(title="No Cumulative Data", template="plotly_dark", height=325)
+        print('zzzzzzz')
+        return traffic_graph, cumulative_graph
     
+    # Convert the list of dictionaries to a DataFrame
     df = pd.DataFrame(timestamp_data)
-    
-    if 'time' not in df.columns:
-        print(" ")
-        return None, None  # Return empty graphs if 'time' column doesn't exist
 
-    # Proceed if 'time' column is present
+    # Ensure that the 'time' column is present
+    if 'time' not in df.columns or df.empty:
+        traffic_graph = px.line(title="No Traffic Data", template="plotly_dark", height=250)
+        cumulative_graph = px.line(title="No Cumulative Data", template="plotly_dark", height=325)
+        
+        return traffic_graph, cumulative_graph
+
+    # Filter by class selection
+    df = df[df['class'].isin(class_selection)]
+    
+    # Convert 'time' column to datetime format for proper grouping
     df['time'] = pd.to_datetime(df['time'], format='%H:%M:%S')
-    
-    df_second = df.groupby(df['time'].dt.floor('S')).size().reset_index(name='count_per_second')
-    df_second['cumulative_count'] = df_second['count_per_second'].cumsum()
+    df = df.sort_values(by='time')  # Ensure data is sorted by time
 
-    # Formatting to only show time without the date
+    # Group data per second and by class
+    df_second = df.groupby([df['time'].dt.floor('S'), 'class']).agg({'count': 'sum'}).reset_index()
+    df_second.rename(columns={'count': 'count_per_second'}, inplace=True)
+
+    # Calculate cumulative count per class
+    df_second['cumulative_count'] = df_second.groupby('class')['count_per_second'].cumsum()
+
+    # Convert time back to HH:MM:SS format for plotting
     df_second['time'] = df_second['time'].dt.strftime('%H:%M:%S')
 
-    traffic_graph = px.line(df_second, x='time', y='count_per_second', title="Traffic Per Second", template="plotly_dark", height=250)
-    cumulative_graph = px.line(df_second, x='time', y='cumulative_count', title="Cumulative Traffic", template="plotly_dark", height=325)
+    print('sss', df_second)
+
+    # Traffic per second for each class
+    traffic_graph = px.line(df_second, x='time', y='count_per_second', color='class', title="Traffic Per Second by Class", 
+                            template="plotly_dark", height=250)
+
+    # Cumulative traffic over time for each class
+    cumulative_graph = px.line(df_second, x='time', y='cumulative_count', color='class', title="Cumulative Traffic by Class", 
+                               template="plotly_dark", height=325)
 
     return traffic_graph, cumulative_graph
+
+
+
+
 
 
 # Function to generate a random color for each class

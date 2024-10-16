@@ -41,20 +41,22 @@ def run_image_detection(
         resolution_height = weather_frame.shape[0]
         update_metric_blocks(total_objects, fps, resolution_width, resolution_height, inference_speed)
 
-        # Draw bounding boxes if there are results
-        if results is not None and results[0].boxes is not None:
-            for box in results[0].boxes:
-                xyxy = box.xyxy[0].cpu().numpy()
-                conf = box.conf.item()
-                cls = int(box.cls.item())
+        # # Draw bounding boxes if there are results
+        # if results is not None and results[0].boxes is not None:
+        #     for box in results[0].boxes:
+        #         xyxy = box.xyxy[0].cpu().numpy()
+        #         conf = box.conf.item()
+        #         cls = int(box.cls.item())
 
-                if conf > confidence_threshold:
-                    class_name = config.model.names[cls]
-                    if class_name in class_selection:
-                        label = f'{class_name} {conf:.2f}'
-                        cv2.rectangle(frame, (int(xyxy[0]), int(xyxy[1])), (int(xyxy[2]), int(xyxy[3])), (0, 255, 0), 2)
-                        cv2.putText(frame, label, (int(xyxy[0]), int(xyxy[1]) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+        #         if conf > confidence_threshold:
+        #             class_name = config.model.names[cls]
+        #             if class_name in class_selection:
+        #                 label = f'{class_name} {conf:.2f}'
+        #                 cv2.rectangle(frame, (int(xyxy[0]), int(xyxy[1])), (int(xyxy[2]), int(xyxy[3])), (0, 255, 0), 2)
+        #                 cv2.putText(frame, label, (int(xyxy[0]), int(xyxy[1]) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
 
+
+        # print(results)
         # Convert BGR to RGB and display the image
         image_with_detections = Image.fromarray(weather_frame)
         frame_placeholder.image(image_with_detections, use_column_width=True)
@@ -71,35 +73,30 @@ def run_image_detection(
         # Keep only the last 10 seconds of data
         current_time = datetime.now().strftime('%H:%M:%S')
         traffic_data = [data for data in traffic_data if data["time"] >= (datetime.now() - timedelta(seconds=10)).strftime('%H:%M:%S')]
-
+        print(traffic_data)
         # Update the graphs even if no objects were detected
-        histogram = update_histogram(current_class_count)
-        if histogram is None:
-            histogram = px.bar(title="Waiting for Object Detection...", template="plotly_dark", height=250)
+        histogram = update_histogram(results, class_selection)
+        
 
         # Display the histogram
         class_distribution_placeholder.plotly_chart(histogram, use_container_width=True)
 
         # Check if results are not None before calculating area proportions
-        if results is not None and results[0].boxes is not None:
-            pie_chart_1 = calculate_area_proportions(results, frame_area, class_selection)
-        else:
-            pie_chart_1 = px.pie(title="No Objects Detected", template="plotly_dark", height=290)
+        
+        pie_chart_1 = calculate_area_proportions(results, frame_area, class_selection)
+        
+        
 
-        pie_chart_2 = update_vehicle_proportion_chart(current_class_count)
-        if pie_chart_2 is None:
-            pie_chart_2 = px.pie(title="No Vehicles Detected", template="plotly_dark", height=290)
+        pie_chart_2 = update_vehicle_proportion_chart(results,class_selection)
+        
 
         # Display the pie charts
         pie_chart_placeholder_1.plotly_chart(pie_chart_1, use_container_width=True)
         pie_chart_placeholder_2.plotly_chart(pie_chart_2, use_container_width=True)
 
         # Update traffic and cumulative graphs
-        traffic_graph, cumulative_graph = update_traffic_graph(traffic_data)
-        if traffic_graph is None:
-            traffic_graph = px.line(title="No Traffic Detected", template="plotly_dark", height=250)
-        if cumulative_graph is None:
-            cumulative_graph = px.line(title="No Cumulative Traffic", template="plotly_dark", height=250)
+        traffic_graph, cumulative_graph = update_traffic_graph(traffic_data,class_selection)
+       
 
         # Display traffic and cumulative graphs
         traffic_graph_placeholder.plotly_chart(traffic_graph, use_container_width=True)

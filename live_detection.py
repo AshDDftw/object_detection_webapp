@@ -7,18 +7,17 @@ import threading
 from datetime import datetime, timedelta
 import time
 import plotly.express as px
-import av  # Ensure that av is imported correctly
+import av
+import pandas as pd
+import config
 from app_utils import update_histogram, calculate_area_proportions, update_vehicle_proportion_chart, update_traffic_graph, apply_weather_effect
 
 
 # Global variable to store traffic data (last 10 seconds)
 traffic_data = []
 
-# Load the YOLOv8 model (you can change the path or model variant if needed)
-model = YOLO('yolov8n.pt')
 
 
-# YOLOv8VideoProcessor class definition to process video frames
 class YOLOv8VideoProcessor(VideoProcessorBase):
     def __init__(self):
         self.confidence_threshold = 0.5
@@ -46,10 +45,12 @@ class YOLOv8VideoProcessor(VideoProcessorBase):
         start_time = time.time()
 
         # YOLOv8 inference
-        results = model(processed_frame)
+        results = config.model(processed_frame)
         
         end_time = time.time()
         self.results = results
+
+        obb_results=self.results[0].obb()
 
         # Calculate frame area and fps
         self.frame_area = processed_frame.shape[0] * processed_frame.shape[1]
@@ -57,31 +58,33 @@ class YOLOv8VideoProcessor(VideoProcessorBase):
         self.inference_speed = (end_time - start_time) * 1000  # Convert to milliseconds
 
         # Process detected objects and update the class count
-        class_count = {name: 0 for name in model.names.values()}
-        for box in results[0].boxes:
-            conf = box.conf.item()
-            cls = int(box.cls.item())
+        class_count = {name: 0 for name in config.model.names.values()}
+        
+        for i in range(obb_results.shape[0]):
+            xywhr = obb_results.data[i][:5]  # Get the xywhr coordinates
+            conf = obb_results.data[i][5].item()  # Get the confidence score
+            cls_idx = int(obb_results.data[i][6].item())  # Get the class index
 
-            if conf > self.confidence_threshold:
-                class_name = model.names[cls]
+            # Filter results based on confidence threshold and selected classes
+            if conf >= self.confidence_threshold:
+                class_name = self.model.names[cls_idx]
                 if class_name in self.class_selection:
+                    # Increment the class count
                     class_count[class_name] += 1
 
-        self.current_class_count = class_count
 
-        # Draw bounding boxes on the frame
-        for box in results[0].boxes:
-            xyxy = box.xyxy[0].cpu().numpy()  # Bounding box coordinates
-            conf = box.conf.item()
-            cls = int(box.cls.item())
+                    # Draw bounding box on the frame (you can use xyxyxyxy for an 8-point polygon)
+                    xyxyxyxy = obb_results.xyxyxyxy[i]  # 8-point polygon coordinates
 
-            if conf > self.confidence_threshold:
-                class_name = model.names[cls]
-                if class_name in self.class_selection:
+                    # Convert to integer coordinates for drawing
+                    points = [(int(x), int(y)) for x, y in xyxyxyxy]
+
+                    # Draw the oriented bounding box on the frame
+                    cv2.polylines(frame, [np.array(points)], isClosed=True, color=(0, 255, 0), thickness=2)
+
+                    # Put label and confidence score near the bounding box
                     label = f'{class_name} {conf:.2f}'
-                    # Draw bounding box and label
-                    cv2.rectangle(processed_frame, (int(xyxy[0]), int(xyxy[1])), (int(xyxy[2]), int(xyxy[3])), (0, 255, 0), 2)
-                    cv2.putText(processed_frame, label, (int(xyxy[0]), int(xyxy[1]) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+                    cv2.putText(frame, label, (points[0][0], points[0][1] - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
 
         return av.VideoFrame.from_ndarray(processed_frame, format="bgr24")
 
@@ -140,13 +143,13 @@ def run_live_detection(
                         frame_placeholder.image(rgb_frame, use_column_width=True)
 
                         # Update charts below the video frame
-                        histogram = update_histogram(processor.current_class_count) or px.bar(
+                        histogram = update_histogram(processor.results,class_selection) or px.bar(
                             title="Waiting for Object Detection...", template="plotly_dark", height=250)
                         
                         pie_chart_1 = calculate_area_proportions(processor.results, processor.frame_area, class_selection) or px.pie(
                             title="No Objects Detected", template="plotly_dark", height=290)
                         
-                        pie_chart_2 = update_vehicle_proportion_chart(processor.current_class_count) or px.pie(
+                        pie_chart_2 = update_vehicle_proportion_chart(processor.results,class_selection) or px.pie(
                             title="No Vehicles Detected", template="plotly_dark", height=290)
 
                         pie_chart_placeholder_1.plotly_chart(pie_chart_1, use_container_width=True)
@@ -168,7 +171,7 @@ def run_live_detection(
                         traffic_data = [data for data in traffic_data if data["time"] >= (datetime.now() - timedelta(seconds=10)).strftime('%H:%M:%S')]
 
                         # Pass the sliding window traffic data to the update_traffic_graph function
-                        traffic_graph, cumulative_graph = update_traffic_graph(traffic_data)
+                        traffic_graph, cumulative_graph = update_traffic_graph(traffic_data, class_selection)
 
                         # Check if graphs are returned before plotting them
                         if traffic_graph:
@@ -187,3 +190,5 @@ def run_live_detection(
                         class_distribution_placeholder.plotly_chart(histogram, use_container_width=True)
 
             time.sleep(0.1)  # Small sleep to prevent resource overconsumption
+
+

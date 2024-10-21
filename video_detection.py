@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 import streamlit as st
 from datetime import datetime, timedelta
-from app_utils import process_frame, update_histogram, calculate_area_proportions, update_vehicle_proportion_chart, update_traffic_graph, apply_weather_effect,generate_heatmap
+from app_utils import process_frame, update_histogram, calculate_area_proportions, update_object_proportion_chart, update_traffic_graph, apply_weather_effect,generate_heatmap
 import time
 import tempfile
 import config
@@ -37,6 +37,8 @@ def run_video_detection(
             if not ret:
                 st.success("Video processing completed.")
                 break
+
+            frame = cv2.resize(frame, (1280, 1200))
 
             # Apply weather effect to the frame
             weather_frame = apply_weather_effect(frame, weather_conditions)
@@ -89,7 +91,7 @@ def run_video_detection(
 
             # Calculate area proportions for pie charts
             pie_chart_1 = calculate_area_proportions(results, frame_area, class_selection)
-            pie_chart_2 = update_vehicle_proportion_chart(results, class_selection)
+            pie_chart_2 = update_object_proportion_chart(results, class_selection)
 
             # Display the pie charts
             pie_chart_placeholder_1.plotly_chart(pie_chart_1, use_container_width=True)

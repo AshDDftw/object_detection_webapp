@@ -10,7 +10,7 @@ import plotly.express as px
 import av
 import pandas as pd
 import config
-from app_utils import update_histogram, calculate_area_proportions, update_vehicle_proportion_chart, update_traffic_graph, apply_weather_effect,generate_heatmap
+from app_utils import update_histogram, calculate_area_proportions, update_object_proportion_chart, update_traffic_graph, apply_weather_effect,generate_heatmap
 
 # Global variable to store traffic data (last 10 seconds)
 traffic_data = []
@@ -35,6 +35,7 @@ class YOLOv8VideoProcessor(VideoProcessorBase):
             self.weather_conditions = weather_conditions
 
     def recv(self, frame):
+        # frame = cv2.resize(frame, (1280, 1120))
         img = frame.to_ndarray(format="bgr24")  # Convert frame to NumPy array (BGR format)
 
         # Apply the weather effect to the frame
@@ -149,8 +150,8 @@ def run_live_detection(
                         pie_chart_1 = calculate_area_proportions(processor.results, processor.frame_area, class_selection) or px.pie(
                             title="No Objects Detected", template="plotly_dark", height=290)
                         
-                        pie_chart_2 = update_vehicle_proportion_chart(processor.results, class_selection) or px.pie(
-                            title="No Vehicles Detected", template="plotly_dark", height=290)
+                        pie_chart_2 = update_object_proportion_chart(processor.results, class_selection) or px.pie(
+                            title="No objects Detected", template="plotly_dark", height=290)
 
                         pie_chart_placeholder_1.plotly_chart(pie_chart_1, use_container_width=True)
                         pie_chart_placeholder_2.plotly_chart(pie_chart_2, use_container_width=True)

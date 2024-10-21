@@ -358,7 +358,7 @@ def update_histogram(results, class_selection):
 
 
 # Function to update the vehicle proportion pie chart
-def update_vehicle_proportion_chart(results, class_selection):
+def update_object_proportion_chart(results, class_selection):
     vehicle_classes = class_selection # Adjust vehicle classes as needed
     vehicle_count = {cls: 0 for cls in vehicle_classes if cls in class_selection}
 
@@ -400,7 +400,7 @@ def update_vehicle_proportion_chart(results, class_selection):
         df = pd.DataFrame(vehicle_data)
         print('vvv',df)
         fig = px.pie(df, names="Object Type", values="Count", title="Object Proportion",
-                     template="plotly_dark", color_discrete_sequence=px.colors.sequential.RdBu, height=325)
+                     template="plotly_dark", color_discrete_sequence=px.colors.sequential.RdBu, height=400)
         fig.update_layout(
     title={
         'text': "Object Proportion",
@@ -413,7 +413,7 @@ def update_vehicle_proportion_chart(results, class_selection):
     yaxis={'visible': False},
 )
     else:
-        fig = px.bar(title="Waiting for Object Detection...", template="plotly_dark", height=250)
+        fig = px.bar(title="Waiting for Object Detection...", template="plotly_dark", height=400)
         fig.update_layout(
     title={
         'text': "Waiting for Object Detection...",
@@ -442,7 +442,7 @@ def calculate_area_proportions(results, frame_area, class_selection):
     
     if not hasattr(results[0], 'obb') or results[0].obb is None:
         # Handle the case where no detections were made (no obb data)
-        fig = px.bar(title="Waiting for Object Detection...", template="plotly_dark", height=250)
+        fig = px.bar(title="Waiting for Object Detection...", template="plotly_dark", height=400)
         fig.update_layout(xaxis={'visible': False}, yaxis={'visible': False}, annotations=[{
             'text': 'No Objects Detected',
             'xref': 'paper',
@@ -483,7 +483,8 @@ def calculate_area_proportions(results, frame_area, class_selection):
         df = pd.DataFrame(area_data)
         print('ccc',df)
         fig = px.pie(df, names="Classes", values="Area", title="Area Proportion",
-                     template="plotly_dark", color_discrete_sequence=px.colors.sequential.RdBu, height=280)
+             template="plotly_dark", color_discrete_sequence=px.colors.sequential.RdBu, height=325)  # Increased height
+
         fig.update_layout(
     title={
         'text': "Area Proportion",

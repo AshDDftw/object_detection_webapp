@@ -561,9 +561,9 @@ def update_traffic_graph(timestamp_data, class_selection):
     # Convert time back to HH:MM:SS format for plotting
     df_second['time'] = df_second['time'].dt.strftime('%H:%M:%S')
 
-    # Handle case for single data point
-    if len(df_second) == 1:
-        df_second = df_second.concat({'time': df_second['time'].iloc[0], 'class': df_second['class'].iloc[0], 'count_per_second': 0, 'cumulative_count': 0}, ignore_index=True)
+    # # Handle case for single data point
+    # if len(df_second) == 1:
+    #     df_second = df_second.concat({'time': df_second['time'].iloc[0], 'class': df_second['class'].iloc[0], 'count_per_second': 0, 'cumulative_count': 0}, ignore_index=True)
 
     # Traffic per second for each class
     traffic_graph = px.line(df_second, x='time', y='count_per_second', color='class', title="Traffic Per Second by Class", 

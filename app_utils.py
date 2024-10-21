@@ -522,6 +522,7 @@ def calculate_area_proportions(results, frame_area, class_selection):
 
 
 def update_traffic_graph(timestamp_data, class_selection):
+    print(class_selection)
     # Check if timestamp_data is valid (non-empty list and contains the necessary keys)
     if not timestamp_data or not all('time' in entry and 'class' in entry and 'count' in entry for entry in timestamp_data):
         print('incoming', timestamp_data)
@@ -562,7 +563,7 @@ def update_traffic_graph(timestamp_data, class_selection):
 
     # Handle case for single data point
     if len(df_second) == 1:
-        df_second = df_second.append({'time': df_second['time'].iloc[0], 'class': df_second['class'].iloc[0], 'count_per_second': 0, 'cumulative_count': 0}, ignore_index=True)
+        df_second = df_second.concat({'time': df_second['time'].iloc[0], 'class': df_second['class'].iloc[0], 'count_per_second': 0, 'cumulative_count': 0}, ignore_index=True)
 
     # Traffic per second for each class
     traffic_graph = px.line(df_second, x='time', y='count_per_second', color='class', title="Traffic Per Second by Class", 

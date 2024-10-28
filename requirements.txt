@@ -1,6 +1,6 @@
 streamlit==1.25.0
 torch  # Let pip resolve the appropriate version
-numpy
+numpy==1.23.5
 opencv-python-headless==4.8.0.74
 Pillow==9.5.0
 pandas==2.1.0

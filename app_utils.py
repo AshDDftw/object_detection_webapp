@@ -141,10 +141,12 @@ def update_histogram(results, class_selection):
         df = pd.DataFrame(class_data)
         fig = px.bar(df, x="Classes", y="Count", title="Object Count", color="Classes", template="plotly_dark", height=325)
         fig.update_layout(
-            title={'text': "Object Count", 'y': 0.9, 'x': 0.5, 'xanchor': 'center', 'yanchor': 'top'},
-            xaxis={'visible': True, 'showgrid': True},
-            yaxis={'visible': True, 'showgrid': True}
-        )
+        title={'text': "Object Count", 'y': 0.9, 'x': 0.5, 'xanchor': 'center', 'yanchor': 'top'},
+        plot_bgcolor='rgba(0,0,0,0)',  # Transparent background for the plot area
+        paper_bgcolor='rgba(0,0,0,0)',  # Transparent background for the paper (overall plot)
+        xaxis={'visible': True, 'showgrid': True, 'zeroline': False},  # Optional: Hide axis lines
+        yaxis={'visible': True, 'showgrid': True, 'zeroline': False},  # Optional: Hide axis lines
+    )
     else:
         fig = px.bar(title="Waiting for Object Detection...", template="plotly_dark", height=325)
         fig.update_layout(
@@ -184,11 +186,17 @@ def update_object_proportion_chart(results, class_selection):
     if filtered_vehicle_count:
         vehicle_data = {"Object Type": list(filtered_vehicle_count.keys()), "Count": list(filtered_vehicle_count.values())}
         df = pd.DataFrame(vehicle_data)
-        fig = px.pie(df, names="Object Type", values="Count", title="Object Proportion", template="plotly_dark", height=500)
+        fig = px.pie(df, names="Object Type", values="Count", title="Object Proportion", template="plotly_dark", height=325)
         fig.update_layout(
             title={'text': "Object Proportion", 'y': 0.9, 'x': 0.5, 'xanchor': 'center', 'yanchor': 'top'},
-            xaxis={'visible': True, 'showgrid': True},
-            yaxis={'visible': True, 'showgrid': True}
+            plot_bgcolor='rgba(0,0,0,0)',  # Transparent background for the plot area
+            paper_bgcolor='rgba(0,0,0,0)',  # Transparent background for the paper (overall plot)
+            xaxis={'visible': False},  # Hide axis
+            yaxis={'visible': False},  # Hide axis
+            showlegend=False,  # Hide legend
+            margin=dict(t=50, b=50, l=50, r=50),  # Adjust margins to avoid text cutoffs
+            uniformtext_minsize=10,  # Minimum size of text
+            uniformtext_mode='hide'  # Hide text if it doesn't fit
         )
     else:
         fig = px.bar(title="Waiting for Object Detection...", template="plotly_dark", height=500)
@@ -235,8 +243,14 @@ def calculate_area_proportions(results, frame_area, class_selection):
         fig = px.pie(df, names="Classes", values="Area", title="Area Proportion", template="plotly_dark", height=325)
         fig.update_layout(
             title={'text': "Area Proportion", 'y': 0.9, 'x': 0.5, 'xanchor': 'center', 'yanchor': 'top'},
-            xaxis={'visible': True, 'showgrid': True},
-            yaxis={'visible': True, 'showgrid': True}
+            plot_bgcolor='rgba(0,0,0,0)',  # Transparent background for the plot area
+            paper_bgcolor='rgba(0,0,0,0)',  # Transparent background for the paper (overall plot)
+            xaxis={'visible': False},  # Hide axis
+            yaxis={'visible': False},  # Hide axis
+            showlegend=False,  # Hide legend
+            margin=dict(t=50, b=50, l=50, r=50),  # Adjust margins to avoid text cutoffs
+            uniformtext_minsize=10,  # Minimum size of text
+            uniformtext_mode='hide'  # Hide text if it doesn't fit
         )
     else:
         fig = px.bar(title="Waiting for Object Detection...", template="plotly_dark", height=325)
@@ -275,6 +289,8 @@ def update_traffic_graph(timestamp_data, class_selection):
     df_second['cumulative_count'] = df_second.groupby('class')['count_per_second'].cumsum()
     df_second['time'] = df_second['time'].dt.strftime('%H:%M:%S')
 
+    print(df_second)
+
     # Handle cases where there are multiple classes but only one timestamp
     if len(df_second['time'].unique()) == 1:
         unique_time = df_second['time'].iloc[0]
@@ -286,19 +302,22 @@ def update_traffic_graph(timestamp_data, class_selection):
                 df_second = pd.concat([df_second, pd.DataFrame([dummy_row])], ignore_index=True)
 
     traffic_graph = px.line(df_second, x='time', y='count_per_second', color='class', title="Traffic Per Second by Class", template="plotly_dark", height=325)
-    cumulative_graph = px.line(df_second, x='time', y='cumulative_count', color='class', title="Cumulative Traffic by Class", template="plotly_dark", height=325)
+    cumulative_graph = px.line(df_second, x='time', y='cumulative_count', color='class', title="Cumulative Traffic by Class", template="plotly_dark", height=300)
 
     traffic_graph.update_layout(
         title={'text': "Traffic Per Second by Class", 'y': 0.9, 'x': 0.5, 'xanchor': 'center', 'yanchor': 'top'},
-        xaxis={'visible': True, 'showgrid': True},
-        yaxis={'visible': True, 'showgrid': True}
+        plot_bgcolor='rgba(0,0,0,0)',  # Transparent background for the plot area
+        paper_bgcolor='rgba(0,0,0,0)',  # Transparent background for the paper (overall plot)
+        xaxis={'visible': True, 'showgrid': True, 'zeroline': False},  # Optional: Hide axis lines
+        yaxis={'visible': True, 'showgrid': True, 'zeroline': False},  # Optional: Hide axis lines
     )
     cumulative_graph.update_layout(
         title={'text': "Cumulative Traffic by Class", 'y': 0.9, 'x': 0.5, 'xanchor': 'center', 'yanchor': 'top'},
-        xaxis={'visible': True, 'showgrid': True},
-        yaxis={'visible': True, 'showgrid': True}
+        plot_bgcolor='rgba(0,0,0,0)',  # Transparent background for the plot area
+        paper_bgcolor='rgba(0,0,0,0)',  # Transparent background for the paper (overall plot)
+        xaxis={'visible': True, 'showgrid': True, 'zeroline': False},  # Optional: Hide axis lines
+        yaxis={'visible': True, 'showgrid': True, 'zeroline': False},  # Optional: Hide axis lines
     )
-
     return traffic_graph, cumulative_graph
 
 
@@ -316,16 +335,36 @@ def update_bottom_plots(histogram, pie_chart, vehicle_pie_chart, traffic_graph, 
     col1, col2, col3 = st.columns(3)
 
     with col1:
+        histogram.update_layout(
+            plot_bgcolor='rgba(0,0,0,0)',  # Transparent background for the plot area
+            paper_bgcolor='rgba(0,0,0,0)',  # Transparent background for the paper (overall plot)
+        )
         histogram.plotly_chart(use_container_width=True)
     with col2:
+        pie_chart.update_layout(
+            plot_bgcolor='rgba(0,0,0,0)',  # Transparent background for the plot area
+            paper_bgcolor='rgba(0,0,0,0)',  # Transparent background for the paper (overall plot)
+        )
         pie_chart.plotly_chart(use_container_width=True)
     with col3:
+        vehicle_pie_chart.update_layout(
+            plot_bgcolor='rgba(0,0,0,0)',  # Transparent background for the plot area
+            paper_bgcolor='rgba(0,0,0,0)',  # Transparent background for the paper (overall plot)
+        )
         vehicle_pie_chart.plotly_chart(use_container_width=True)
 
     col4, col5 = st.columns(2)
     with col4:
+        traffic_graph.update_layout(
+            plot_bgcolor='rgba(0,0,0,0)',  # Transparent background for the plot area
+            paper_bgcolor='rgba(0,0,0,0)',  # Transparent background for the paper (overall plot)
+        )
         traffic_graph.plotly_chart(use_container_width=True)
     with col5:
+        cumulative_graph.update_layout(
+            plot_bgcolor='rgba(0,0,0,0)',  # Transparent background for the plot area
+            paper_bgcolor='rgba(0,0,0,0)',  # Transparent background for the paper (overall plot)
+        )
         cumulative_graph.plotly_chart(use_container_width=True)
 
 
@@ -390,4 +429,6 @@ def generate_heatmap(frame, results, colormap=cv2.COLORMAP_JET):
     heatmap = cv2.normalize(heatmap, None, 0, 255, cv2.NORM_MINMAX)
     colored_heatmap = cv2.applyColorMap(heatmap.astype(np.uint8), colormap)
 
-    return colored_heatmap
+    final_heatmap = cv2.resize(colored_heatmap,(320,200))
+
+    return final_heatmap

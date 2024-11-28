@@ -183,7 +183,7 @@ def run_live_detection(
 
                         # Display the heatmap in the cumulative graph placeholder
                         heatmap_frame = generate_heatmap(processed_frame, processor.results)
-                        cumulative_graph_placeholder.image(heatmap_frame, use_column_width=True)
+                        # cumulative_graph_placeholder.image(heatmap_frame, use_column_width=True)
 
                         # Update class distribution histogram
                         class_distribution_placeholder.plotly_chart(histogram, use_container_width=True)

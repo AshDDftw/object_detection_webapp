@@ -12,7 +12,12 @@ st.markdown("""
     <style>
     .css-18e3th9 { padding-top: 0.5rem; padding-bottom: 0.5rem; }
     .css-1d391kg { padding-top: 0.5rem; padding-bottom: 0.5rem; }
-    .stApp { background-color: #6b38b5; padding-left: 20px; padding-right: 20px;} /* Add padding from screen edges */
+    .stApp {
+    background: linear-gradient(135deg, #191970, #3a8ddb);
+    padding-left: 20px;
+    padding-right: 20px;
+}
+
 
     /* Style the title */
     .title {
@@ -85,33 +90,58 @@ with metric_col3:
 with metric_col4:
     inference_speed_placeholder = st.empty()
 
-# Insert margin below the metric blocks using Streamlit markdown
-st.markdown("<div class='metric-block'></div>", unsafe_allow_html=True)
+st.markdown("""
+    <style>
+        .metric-block {
+            margin-bottom: 20px;
+        }
+
+        /* Round borders for placeholder elements */
+        .metric-block, .stEmpty {
+            border-radius: 15px;
+            border: 2px solid #ccc;  /* Light border for the elements */
+            padding: 10px;
+        }
+
+        /* Optional: Add margin below the metric block */
+        .stEmpty {
+            margin-bottom: 20px;
+        }
+    </style>
+""", unsafe_allow_html=True)
+
+
 
 # Main layout: Vehicle Proportion and Traffic Graph on the Left, Input Frame on the Right
 left_col, right_col = st.columns([2, 3], gap="medium")
 
 with left_col:
-    pie_chart_placeholder_1 = st.empty()  # Vehicle Proportion
+    lc , rc = st.columns(2, gap="medium")
+    with lc:
+        pie_chart_placeholder_1 = st.empty()  # Vehicle Proportion
+    with rc:
+        pie_chart_placeholder_2 = st.empty()  # Object proportion pie chart
     traffic_graph_placeholder = st.empty()  # Traffic Graph
+    class_distribution_placeholder = st.empty()  # Below the frame: Class distribution histogram (full width)
+    cumulative_graph_placeholder = st.empty()  # Heatmap placeholder
 
 with right_col:
     frame_placeholder = st.empty()  # Display input image/video
+    cumulative_graph_placeholder = st.empty()  # Heatmap placeholder
 
 
 st.markdown("<div style='margin-bottom: 20px;'></div>", unsafe_allow_html=True)  # Add space before the frame
-class_distribution_placeholder = st.empty()  # Below the frame: Class distribution histogram (full width)
+
 
 # Full-width Class Distribution Histogram Below the Frame and Graphs
 st.markdown("<div style='margin-bottom: 20px;'></div>", unsafe_allow_html=True)  # Add space between sections
 st.markdown('<hr style="border:1px solid #FFFFFF;">', unsafe_allow_html=True)  # Horizontal line between sections
 
-# Bottom section: Object Proportion Pie Chart and Heatmap side by side
+# # Bottom section: Object Proportion Pie Chart and Heatmap side by side
 bottom_col1, bottom_col2 = st.columns(2, gap="medium")
-with bottom_col1:
-    pie_chart_placeholder_2 = st.empty()  # Object proportion pie chart
-with bottom_col2:
-    cumulative_graph_placeholder = st.empty()  # Heatmap placeholder
+# with bottom_col1:
+    
+
 
 # Sidebar options for detection mode
 detection_mode = st.sidebar.radio("Detection Mode", ("Live Detection", "Upload Image", "Upload Video"))

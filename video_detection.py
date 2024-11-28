@@ -102,7 +102,7 @@ def run_video_detection(
 
             # Display traffic and cumulative graphs
             traffic_graph_placeholder.plotly_chart(traffic_graph, use_container_width=True)
-            cumulative_graph_placeholder.image(heatmap_overlay, use_column_width=True)
+            # cumulative_graph_placeholder.image(heatmap_overlay, use_column_width=True)
 
             # Ensure class distribution histogram is shown
             class_distribution_placeholder.plotly_chart(histogram, use_container_width=True)

@@ -27,7 +27,7 @@ def run_image_detection(
         image = Image.open(uploaded_image)
         frame = np.array(image)
 
-        frame = cv2.resize(frame, (1280, 1200))
+        frame = cv2.resize(frame, (1280, 1200) , interpolation=cv2.INTER_AREA)
 
         # Apply weather effect to the frame
         weather_frame = apply_weather_effect(frame, weather_conditions)
@@ -77,4 +77,4 @@ def run_image_detection(
         heatmap_overlay = generate_heatmap(weather_frame, results)
         heatmap_image = Image.fromarray(heatmap_overlay)
         traffic_graph_placeholder.plotly_chart(traffic_graph, use_container_width=True)
-        cumulative_graph_placeholder.image(heatmap_image, use_column_width=True)
+        # cumulative_graph_placeholder.image(heatmap_image, use_column_width=True)
